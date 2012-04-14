@@ -1,3 +1,5 @@
-s = generate_radar_data();
-image = process_radar_data(s);   % change to Patrick's function's name
+%s = generate_radar_data();
+%save('radar_raw_data.mat', 's');
+load('radar_raw_data.mat', 's');
+image = SAR(s);
 display_3d(image);
