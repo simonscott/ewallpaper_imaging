@@ -6,7 +6,7 @@ function [n_targets, targets_x, targets_y, targets_z] = generate_scene()
 
 n_targets = 2;
 
-targets_x = [-1, -1];
+targets_x = [-1, 1];
 targets_y = [0, 0];
 targets_z = [2, 2];
 
