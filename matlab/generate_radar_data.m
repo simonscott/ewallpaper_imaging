@@ -33,14 +33,12 @@ s = zeros(n_ant_x, n_ant_y, n_samps);
 
 % For each antenna in array
 for ant_x_idx = 0 : n_ant_x - 1
-    
-    disp(ant_x_idx);
-    
-    ant_x = -delta_x * ((n_ant_x-1)/2) + ant_x_idx * delta_x;
+        
+    ant_x = (ant_x_idx - n_ant_x/2) * delta_x;
     
     for ant_y_idx = 0 : n_ant_y - 1
     
-        ant_y = -delta_y * ((n_ant_y-1)/2) + ant_y_idx * delta_y;
+        ant_y = (ant_y_idx - n_ant_y/2) * delta_y;
         
         % For each frequency step
         for f_idx = 0 : n_samps - 1
@@ -59,7 +57,8 @@ for ant_x_idx = 0 : n_ant_x - 1
                 phase_delay =  time_delay * f * 2*pi;
                 
                 % Add to received signal
-                rx = rx + 100 * cos(phase_delay) + 100j * cos(phase_delay - pi/2);
+                % rx = rx + 1 * cos(phase_delay) - 1j * cos(phase_delay - pi/2);
+                rx = rx + exp(-j * phase_delay);
             end
 
             % Add to response
