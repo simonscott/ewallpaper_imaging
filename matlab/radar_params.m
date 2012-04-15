@@ -14,7 +14,7 @@ delta_y = 0.012;        % units are meters
 f_carrier = 10e9;       % units are Hz
 bandwidth = 2e9;        % from 10 GHz to 12 GHz
 chirp_duration = 4e-6;  % units are seconds
-n_samps = 1;
+n_samps = 256;
 delta_f = bandwidth / n_samps;
 
 % Scene parameters

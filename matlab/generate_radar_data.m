@@ -35,6 +35,7 @@ s = zeros(n_ant_x, n_ant_y, n_samps);
 for ant_x_idx = 0 : n_ant_x - 1
         
     ant_x = (ant_x_idx - n_ant_x/2) * delta_x;
+    fprintf('Antenna column %d of %d\n', ant_x_idx, n_ant_x);
     
     for ant_y_idx = 0 : n_ant_y - 1
     

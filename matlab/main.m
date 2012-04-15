@@ -1,5 +1,5 @@
 %s = generate_radar_data();
-%save('radar_raw_data.mat', 's');
-load('radar_raw_data.mat', 's');
-image = SAR(s);
+%save('scene_1.mat', 'scene_1');
+load('scene_1.mat', 'scene_1');
+image = SAR(scene_1);
 display_3d(image);
