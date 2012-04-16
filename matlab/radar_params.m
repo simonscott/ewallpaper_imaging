@@ -1,3 +1,7 @@
+% Declare all variable global
+global c n_ant_x n_ant_y delta_x delta_y f_carrier bandwidth chirp_duration
+global n_samps delta_f range_max
+
 % Physical constants
 
 c = 299792458;          % speed of light, in m/s
