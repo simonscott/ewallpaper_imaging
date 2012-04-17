@@ -1,18 +1,21 @@
-function display_3d(image, display_method)
+function display_3d(image, display_method, threshold)
 % Makes a 3D plot of the provided image.
 % 'image' is a 3D matrix
-% 'display_method' is either 'isonorm' (default) or 'sphere'.
+% 'display_method' (optional) is either 'isosurf' (default) or 'sphere'.
+% 'threshold' (optional) is the cutoff threshold for plotting.
 % A "dot" is plotted at each non-zero location in the 3D matrix.
 % The colour of the dot is determined by the value at that location.
 
 radar_params;
 
 if nargin == 1
-    display_method = 'isonorm';
+    display_method = 'isosurf';
+    threshold = 2;
 end
 
-% The cut-off threshold
-threshold = 2;
+if nargin == 2
+    threshold = 2;
+end
 
 dim = size(image);
 figure();
@@ -43,7 +46,7 @@ if strcmp(display_method, 'sphere')
 
 % Display data as a bunch of surfaces connecting all points that have
 % magnitude equal to the cutoff threshold
-elseif strcmp(display_method, 'isonorm')
+elseif strcmp(display_method, 'isosurf')
 
     p = patch(isosurface(image, threshold));
     isonormals(image, p);
