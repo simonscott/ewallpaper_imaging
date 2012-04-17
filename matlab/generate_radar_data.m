@@ -1,6 +1,11 @@
-function s = generate_radar_data()
-%Simulates a radar imaging system, and returns the received ADC data.
-%   Returns a 3D matrix of the received samples.
+function s = generate_radar_data(scene_type)
+% Simulates a radar imaging system, and returns the received ADC data.
+% scene_type is either 'simple' or 'sphere'. Default is 'simple'.
+% Returns a 3D matrix of the received samples.
+
+if nargin == 0
+    scene_type = 'simple';
+end
 
 % Import system parameters
 radar_params
@@ -29,7 +34,11 @@ disp(out_str);
 s = zeros(n_ant_x, n_ant_y, n_samps);
 
 % Generate scene
-[n_targets, targets_x, targets_y, targets_z] = generate_scene();
+if strcmp(scene_type, 'simple')
+    [n_targets, targets_x, targets_y, targets_z, targets_refl] = generate_scene_simple();
+else
+    [n_targets, targets_x, targets_y, targets_z, targets_refl] = generate_scene_sphere();
+end    
 
 % For each antenna in array
 for ant_x_idx = 0 : n_ant_x - 1
@@ -59,7 +68,7 @@ for ant_x_idx = 0 : n_ant_x - 1
                 
                 % Add to received signal
                 % rx = rx + 1 * cos(phase_delay) - 1j * cos(phase_delay - pi/2);
-                rx = rx + exp(-j * phase_delay);
+                rx = rx + targets_refl(target) * exp(-j * phase_delay);
             end
 
             % Add to response
