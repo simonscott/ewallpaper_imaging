@@ -35,7 +35,7 @@ for Ri = 1:length(Rs)
         targets_x(1, end+1) = x;
         targets_y(1, end+1) = y;
         targets_z(1, end+1) = cz - z;
-        targets_refl(1, end+1) = 2;
+        targets_refl(1, end+1) = 1;
         n_targets = n_targets + 1;
     end
 end
