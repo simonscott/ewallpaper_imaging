@@ -18,9 +18,8 @@ complex c_mult(complex x, complex y);
 complex c_add(complex x, complex y);
 
 //Signal Processing Functions
-void fft_1d(complex* x, int n, int stride);
-void fft_1d_slow(complex* x, int n, int stride);
-void ifft_1d(complex* x, int n, int stride);
+void fft_1d(complex* x, int N, int stride, complex* y);
+void ifft_1d(complex* x, int N, int stride, complex* y);
 
 //Application Specific Math
 //void interp_1d(complex* x, int n, ?);

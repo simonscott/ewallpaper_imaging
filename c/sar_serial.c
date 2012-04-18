@@ -32,19 +32,33 @@ void* safe_malloc(int size, char* error_message){
 
 int main(int argc, char** argv) {
 
-  int n = 8;
-  int stride = 10;
-  complex temp[n*stride];
-  for(int i=0; i<n; i++){
-    temp[i*stride].real = i;
-    temp[i*stride].imag = 0;
-  }
-  fft_1d(temp, n, stride);
-
-  for(int i=0; i<n; i++){
-    printf("(%f, %f)\n", temp[i*stride].real, temp[i*stride].imag);
+  //Create some fake data
+  int N = 16;
+  complex x[N];
+  for(int i=0; i<N; i++){
+    x[i].real = i;
+    x[i].imag = 0;
   }
 
+  //Take the FFT
+  complex y[N];
+  fft_1d(x, N, 1, y);
+
+  //Print out the FFT
+  printf("FFT:\n");
+  for(int i=0; i<N; i++)
+    printf("(%f, %f)\n", y[i].real, y[i].imag);
+  printf("\n");
+
+  //Take the IFFT
+  complex r[N];
+  ifft_1d(y, N, 1, r);
+
+  //Print out the IFFT
+  printf("IFFT:\n");
+  for(int i=0; i<N; i++)
+    printf("(%f, %f)\n", r[i].real, r[i].imag);
+  printf("\n");
   
     
   /*

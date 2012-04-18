@@ -20,83 +20,48 @@ inline complex c_add(complex x, complex y) {
   return r;
 }
 
-void fft_helper(complex* x, int N, int stride, complex* y){
+void fft_1d(complex* x, int N, int stride, complex* y){
   if(N > 1) {
+    fft_1d(x, N/2, 2*stride, y); //compute FFT{x_even}
+    fft_1d(x + stride, N/2, 2*stride, y + N/2); //compute FFT{x_odd}
     
+    for(int k=0; k<N/2; k++) {
+      complex Wkn1 = {cos(2*pi/N * k), -sin(2*pi/N * k)};
+      complex Wkn2 = {cos(2*pi/N * (k + N/2)), -sin(2*pi/N * (k + N/2))};
+      complex yk1 = c_add(y[k], c_mult(Wkn1, y[k + N/2]));
+      complex yk2 = c_add(y[k], c_mult(Wkn2, y[k + N/2]));
+      y[k] = yk1;
+      y[k+N/2] = yk2;
+    }
   } else {
     y[0] = x[0];
   }
 }
 
-void fft_1d(complex* x, int N, int stride) {
 
-  if(N > 1){
-    fft_1d(x, N/2, stride*2); //compute FFT{x_even}
+void ifft_1d_helper(complex* x, int N, int stride, complex* y){
+  if(N > 1) {
+    ifft_1d_helper(x, N/2, 2*stride, y); //compute FFT{x_even}
+    ifft_1d_helper(x + stride, N/2, 2*stride, y + N/2); //compute FFT{x_odd}
     
-    fft_1d(x+stride, N/2, stride*2); //compute FFT{x_odd}
+    for(int k=0; k<N/2; k++) {
+      complex Wkn1 = {cos(2*pi/N * k), sin(2*pi/N * k)};
+      complex Wkn2 = {cos(2*pi/N * (k + N/2)), sin(2*pi/N * (k + N/2))};
+      complex yk1 = c_add(y[k], c_mult(Wkn1, y[k + N/2]));
+      complex yk2 = c_add(y[k], c_mult(Wkn2, y[k + N/2]));
 
-
-    printf("Even FFT: ");
-    for(int i=0; i<N/2; i++)
-      printf("(%f,%f), ", x[i*stride*2].real, x[i*stride*2].imag);
-    printf("\n");
-
-    printf("Odd FFT: ");
-    for(int i=0; i<N/2; i++)
-      printf("(%f,%f), ", x[i*stride*2 + stride].real, x[i*stride*2 + stride].imag);
-    printf("\n");
-    
-    for(int k=0; k<N/2; k++){
-      //Positive Freq
-      complex Xk1;
-      complex Xk2;
-      
-      complex Wkn1 = {cos(2*pi/N * k), -sin(2*pi/N * k)};
-      printf("(%f,%f) + (%f,%f)*(%f,%f)\n",
-             x[2*k*stride].real, x[2*k*stride].imag,
-             Wkn1.real, Wkn1.imag,
-             x[2*k*stride + stride].real, x[2*k*stride + stride].imag);
-      
-      Xk1 = c_add(x[2*k*stride], c_mult(Wkn1, x[2*k*stride + stride]));
-
-      complex Wkn2 = {cos(2*pi/N * (k + N/2)), -sin(2*pi/N * (k + N/2))};      
-      printf("(%f,%f) + (%f,%f)*(%f,%f)\n",
-             x[2*k*stride].real, x[2*k*stride].imag,
-             Xk2.real, Xk2.imag,
-             x[2*k*stride + stride].real, x[2*k*stride + stride].imag);
-             
-      Xk2 = c_add(x[2*k*stride], c_mult(Wkn2, x[2*k*stride + stride]));
-
-      x[k*stride] = Xk1;
-      printf("k*stride = %d\n", k*stride);
-      x[(k + N/2)*stride] = Xk2;
-      printf("(k + N/2)*stride = %d\n", (k + N/2)*stride);
-
-    printf("[AFTER] Even FFT: ");
-    for(int i=0; i<N/2; i++)
-      printf("%d(%f,%f), ", i*stride*2, x[i*stride*2].real, x[i*stride*2].imag);
-    printf("\n");
-
-    printf("[AFTER] Odd FFT: ");
-    for(int i=0; i<N/2; i++)
-      printf("%d(%f,%f), ", i*stride*2 + stride, x[i*stride*2 + stride].real, x[i*stride*2 + stride].imag);
-    printf("\n");
-
+      y[k] = yk1;
+      y[k+N/2] = yk2;
     }
+  } else {
+    y[0] = x[0];
   }
 }
 
-void fft_1d_slow(complex* x, int N, int stride) {
-  complex y[N];
-  for(int k=0; k<N; k++) {    
-    y[k].real = 0;
-    y[k].imag = 0;
-    for(int n=0; n<N; n++) {
-      complex Wkn = {cos(2*pi/N * k*n), -sin(2*pi/N * k*n)};
-      y[k] = c_add(y[k], c_mult(x[n], Wkn));
-    }
+void ifft_1d(complex* x, int N, int stride, complex* y){
+  ifft_1d_helper(x, N, stride, y);
+  for(int n=0; n<N; n++){
+    y[n].real /= N;
+    y[n].imag /= N;
   }
-  
-  for(int k=0; k<N; k++)
-    x[k] = y[k];
 }
