@@ -16,10 +16,14 @@ typedef struct {
 //Complex Number Functions
 complex c_mult(complex x, complex y);
 complex c_add(complex x, complex y);
+complex c_jexp(float theta);
+void c_print(complex x);
 
 //Signal Processing Functions
 void fft_1d(complex* x, int N, int stride, complex* y);
 void ifft_1d(complex* x, int N, int stride, complex* y);
+void fft_1d_in_place(complex* x, int N, int stride);
+void ifft_1d_in_place(complex* x, int N, int stride);
 
 //Application Specific Math
 //void interp_1d(complex* x, int n, ?);
