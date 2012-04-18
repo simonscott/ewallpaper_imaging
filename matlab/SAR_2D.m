@@ -19,7 +19,7 @@ jj = 1j;
 Dx = delta_x;
 Dy = delta_y;
 f0 = f_carrier;
-z0 = -2;
+z0 = 2;
 
 % Fake data
 s_new = zeros(n_ant_x, n_ant_y);
@@ -63,7 +63,7 @@ for i = 0:Nx-1
     end
     
     kz = sqrt(4*k^2 - kx^2 - ky^2);
-    A(i+1,j+1) = A(i+1,j+1) * exp(-jj * kz * z0);
+    A(i+1,j+1) = A(i+1,j+1) * exp(1j * kz * z0);
   end
 end
 
