@@ -3,62 +3,6 @@
 #include <stdio.h>
 #include <math.h>
 
-// Reads in the file specified by "filename" and stores the data in "data"
-// Assumes that the file is formatted as real, imag on each line like so:
-// 10.41241, 124.152
-// 124.1241, 123.15124
-// where the iteration order is Nx * Ny * Nf (Nf being the fastest varying index)
-void read_data(complex* data, char* filename){
-  FILE* file = fopen(filename, "r");
-  if(!file) {
-    printf("File %s could not be found.\n", filename);
-    exit(-1);
-  }
-  
-  int n = 0;
-  int i, j, k, res;
-  complex num;
-
-  for(i=0; i < Nx; i++)
-    for(j=0; j < Ny; j++)
-      for(k=0; k < Nf; k++){
-        res = fscanf(file, "%f, %f\n", &num.real, &num.imag);
-        data[n] = num;
-        n++;
-      }
-
-  fclose(file);
-}
-
-// Outputs the matrix in data to the file specified by "filename".
-// Formats the file in the same format that it was written in as per above.
-void write_data(complex* data, char* filename){
-  int i, j, k;
-  FILE* file = fopen(filename, "w");
-  int n = 0;
-
-  for(i=0; i<Nx; i++)
-    for(j=0; j<Ny; j++)
-      for(k=0; k<Nf; k++){
-        fprintf(file, "%f, %f\n", data[n].real, data[n].imag);
-        n++;
-      }
-  fclose(file);
-}
-
-// Safely allocate a block of memory
-// Internally calls malloc to allocate memory
-// If malloc fails, then error_message is printed out and the program is aborted.
-void* safe_malloc(int size, char* error_message) {
-  void* a = malloc(size);
-  if(!a){
-    printf("%s", error_message);
-    printf("\n");
-    exit(-1);
-  }
-  return a;
-}
-
 // Perform a single 2D FFT by performing nx+ny 1D FFTs
 // fft_2d(complex* x, int nx, int ny, int x_stride, int y_stride)
 // 1. Perform 1D FFTs along rows
