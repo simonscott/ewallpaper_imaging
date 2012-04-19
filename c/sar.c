@@ -105,7 +105,7 @@ void fft_1d_helper(complex* x, int N, int stride, complex* y){
 // 3. copy the contents of the temporary buffer to x, with the appropriate stride
 void fft_1d(complex* x, int N, int stride){
   complex buffer[N];
-  fft_1d(x, N, stride, buffer);
+  fft_1d_helper(x, N, stride, buffer);
   for(int i=0; i<N; i++)
     x[i*stride] = buffer[i];
 }
@@ -172,25 +172,22 @@ void ifft_1d(complex* x, int N, int stride){
 // 4.   get the lower element x_low = x[floor(n[i]) * stride]
 // 5.   get the higher element x_high = x[ceil(n[i]) * stride]
 // 6.   compute the interpolation mixing ratio, ratio = n[i] - floor(n[i])
-// 7.   compute the interpolated value, x_interp = ratio * x_low + (1 - ratio) * x_high
+// 7.   compute the interpolated value, x_interp = (1 - ratio) * x_low + ratio * x_high
 // 8.   store the interpolated value into the buffer
 // 9. copy the values from the temporary buffer back into x
-void resample_1d(complex* x, int N, int stride, float* n) {
+void resample_1d(complex* x, int N, int stride, float* n) {  
   complex buffer[N];
   for(int i=0; i<N; i++){
     complex x_interp;
-    if(n[i] < 0 || ceil(n[i]) >= N){
+    if(n[i] < 0 || n[i] > N - 1){
       x_interp.real = 0;
       x_interp.imag = 0;
     } else {
       complex x_low = x[(int)floor(n[i]) * stride];
       complex x_high = x[(int)ceil(n[i]) * stride];
       float ratio = n[i] - floor(n[i]);
-      x_interp = c_add(c_scalar_mult(x_low, ratio), c_scalar_mult(x_high, 1-ratio));
-      buffer[i] = x_interp;
+      x_interp = c_add(c_scalar_mult(x_low, 1 - ratio), c_scalar_mult(x_high, ratio));
     }
+    buffer[i] = x_interp;
   }
-
-  for(int i=0; i<N; i++)
-    x[i*stride] = buffer[i];
 }

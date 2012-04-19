@@ -10,6 +10,10 @@
 // where the iteration order is Nx * Ny * Nf (Nf being the fastest varying index)
 void read_data(complex* data, char* filename){
   FILE* file = fopen(filename, "r");
+  if(!file) {
+    printf("File %s could not be found.\n", filename);
+    exit(-1);
+  }
   
   int n = 0;
   complex num;
@@ -41,7 +45,7 @@ void write_data(complex* data, char* filename){
 // Safely allocate a block of memory
 // Internally calls malloc to allocate memory
 // If malloc fails, then error_message is printed out and the program is aborted.
-void* safe_malloc(int size, char* error_message){
+void* safe_malloc(int size, char* error_message) {
   void* a = malloc(size);
   if(!a){
     printf("%s", error_message);
@@ -51,58 +55,68 @@ void* safe_malloc(int size, char* error_message){
   return a;
 }
 
-// Perform a single 2D FFT by performing Nx+Ny 1D FFTs
-// fft_2d(complex* x, int Nx, int Ny, int x_stride, int y_stride)
+// Perform a single 2D FFT by performing nx+ny 1D FFTs
+// fft_2d(complex* x, int nx, int ny, int x_stride, int y_stride)
 // 1. Perform 1D FFTs along rows
 //    Element x[i,j] is located at x[i * x_stride + j * y_stride]
-//    So each row starts at x + 0 * x_stride + j * y_stride, has length Nx, and stride x_stride
+//    So each row starts at x + 0 * x_stride + j * y_stride, has length nx, and stride x_stride
 // 2. Perform 1D FFTs along columns
 //    Element x[i,j] is located at x[i * x_stride + j * y_stride]
-//    So each column starts at x + i * x_stride + 0 * y_stride, has length Ny, and stride y_stride
-void fft_2d(complex* x, int Nx, int Ny, int x_stride, int y_stride) {
-  for(int i=0; i<Nx; i++)
-    fft_1d_in_place(x + j * y_stride, Nx, x_stride);
-  for(int j=0; j<Ny; j++)
-    fft_1d_in_place(x + i * x_stride, Ny, y_stride);
+//    So each column starts at x + i * x_stride + 0 * y_stride, has length ny, and stride y_stride
+void fft_2d(complex* x, int nx, int ny, int x_stride, int y_stride) {
+  for(int j=0; j<ny; j++)
+    fft_1d(x + j * y_stride, nx, x_stride);
+  for(int i=0; i<nx; i++)
+    fft_1d(x + i * x_stride, ny, y_stride);
 }
 
-// Perform a single 2D IFFT by performing Nx+Ny 1D IFFTs
-// ifft_2d(complex* x, int Nx, int Ny, int x_stride, int y_stride)
+// Perform a single 2D IFFT by performing nx+ny 1D IFFTs
+// ifft_2d(complex* x, int nx, int ny, int x_stride, int y_stride)
 // 1. Perform 1D IFFTs along rows
 //    Element x[i,j] is located at x[i * x_stride + j * y_stride]
-//    So each row starts at x + 0 * x_stride + j * y_stride, has length Nx, and stride x_stride
+//    So each row starts at x + 0 * x_stride + j * y_stride, has length nx, and stride x_stride
 // 2. Perform 1D IFFTs along columns
 //    Element x[i,j] is located at x[i * x_stride + j * y_stride]
-//    So each column starts at x + i * x_stride + 0 * y_stride, has length Ny, and stride y_stride
-void ifft_2d(complex* x, int Nx, int Ny, int x_stride, int y_stride) {
-  for(int i=0; i<Nx; i++)
-    ifft_1d_in_place(x + j * y_stride, Nx, x_stride);
-  for(int j=0; j<Ny; j++)
-    ifft_1d_in_place(x + i * x_stride, Ny, y_stride);
+//    So each column starts at x + i * x_stride + 0 * y_stride, has length ny, and stride y_stride
+void ifft_2d(complex* x, int nx, int ny, int x_stride, int y_stride) {
+  for(int j=0; j<ny; j++)
+    ifft_1d(x + j * y_stride, nx, x_stride);
+  for(int i=0; i<nx; i++)
+    ifft_1d(x + i * x_stride, ny, y_stride);
 }
 
-// Perform a single 3D IFFT by performing NZ 2D IFFTs followed by Nx*Ny 1D IFFTs
+// Perform a single 3D IFFT by performing NZ 2D IFFTs followed by nx*ny 1D IFFTs
 // 1. Perform 2D IFFTs along xy planes
 //    Element x[i,j] is located at x[i * x_stride + j * y_stride + k * z_stride]
 //    So each plane starts at x + 0 * x_stride + 0 * y_stride + k * z_stride
 // 2. Perform 1D IFFTs along z axis
 //    Each line starts at x + i * x_stride + j * y_stride + 0 * z_stride
-void ifft_3d(complex* x, int Nx, int Ny, int Nz, int x_stride, int y_stride, int z_stride) {
-  for(int k=0; k<Nz; k++)
-    ifft_2d(x + k * z_stride, Nx, Ny, x_stride, y_stride);
-  for(int i=0; i<Nx; i++)
-    for(int j=0; j<Ny; j++)
-      ifft_1d_in_place(x + i * x_stride + j * y_stride, Nz, z_stride);
+void ifft_3d(complex* x, int nx, int ny, int nz, int x_stride, int y_stride, int z_stride) {
+  for(int k=0; k<nz; k++)
+    ifft_2d(x + k * z_stride, nx, ny, x_stride, y_stride);
+  for(int i=0; i<nx; i++)
+    for(int j=0; j<ny; j++)
+      ifft_1d(x + i * x_stride + j * y_stride, nz, z_stride);
 }
 
-int main(int argc, char** argv) {
+void print_snippet(complex* x){
+  for(int i=0; i<4; i++)
+    for(int j=0; j<4; j++)
+      for(int k=0; k<4; k++){
+        c_print(x[i*Ny*Nf + j*Nf + k]);
+        printf("\n");
+      }
+  printf("\n");
+}
+
+int main(int argc, char** argv) {  
   // Read in data
   // 1. allocate buffer space for the data. Holds Nx * Ny * Nf complex numbers.
   // 2. pass the filename and buffer to read_data which will read the file
   //    into the buffer.
   complex* s = (complex*)safe_malloc(Nx * Ny * Nf * sizeof(complex),
                          "Failed to allocate memory for radar data.");  
-  read_data(s, "scene_1.dat");  
+  read_data(s, "scene_4.dat");
 
   // Perform a single 2D FFT for each frequency
   // Each element s[i,j,n] is located at s[i * Ny * Nf + j * Nf + n]
@@ -121,10 +135,10 @@ int main(int argc, char** argv) {
   //        ky = 2*pi/Dy * j/Ny          if j < Ny/2,
   //             2*pi/Dy * (j-Ny)/Ny     otherwise
   //        w  = 2*pi*(f0 + n*Df)
-  //        k  = 2*w/c
+  //        k  = w/c
   //
   // 3.   compute kz
-  //        kz = sqrt( k^2 - kx^2 - ky^2 )
+  //        kz = sqrt(4 * k^2 - kx^2 - ky^2 )
   // 4.   compute the phase delay
   //        phi = exp(j * kz * z0)
   // 5.   multiply the signal with the phase delay
@@ -140,11 +154,11 @@ int main(int argc, char** argv) {
           2*pi/Dy * (j - Ny)/Ny;
         
         float w = 2*pi*(f0 + n*Df);
-        float k = 2*w/c_speed;
-        float kz = sqrt(k*k - kx*kx - ky*ky);
+        float k = w/c_speed;
+        float kz = sqrt(4*k*k - kx*kx - ky*ky);
         
         complex phi = c_jexp(kz * z0);
-        s[i * Ny * Nf + j * Nf + n] = c_mult(s[i * Ny * Nf + j * Nf + n], phi);
+        s[i * Ny * Nf + j * Nf + n] = c_mult(s[i * Ny * Nf + j * Nf + n], phi);        
       }
 
   // Calculate the range of the Stolt interpolation indices.
@@ -160,7 +174,7 @@ int main(int argc, char** argv) {
   //   minimum wavenumber in the z direction, kz_min = sqrt(4*k_min^2 - kx_max^2 - ky_max^2)
   //   maximum wavenumber in the z direction, kz_max = sqrt(4*k_max^2 - 0 - 0)
   float w_min = 2*pi * f0;
-  float w_max = 2*pi * (f0 + (N - 1)*Df);
+  float w_max = 2*pi * (f0 + (Nf - 1)*Df);
   float k_min = w_min / c_speed;
   float k_max = w_max / c_speed;
   float kx_max = 2*pi/Dx * 0.5 * (Nx-1)/Nx;
@@ -174,13 +188,14 @@ int main(int argc, char** argv) {
   // 2.   compute kx, and ky as per step 2. above
   // 3.   create float buffer of size Nf for storing the interpolation indices, n_interp
   // 4.   for each step in frequency, n in 0 ... Nf
-  //         compute kz = kz_min + (kz_max - kz_min) * n/Nf
+  //         compute kz = kz_min + (kz_max - kz_min) * n/(Nf - 1)
   // 4.      compute desired k = 0.5 * sqrt(kx^2 + ky^2 + kz^2)
   // 5.      which corresponds to the interpolated array element
   //            n_interp[n] = (c*k/(2*pi) - f0)/Df
   // 6.   resample this line in s on interpolated indices n_interp
   //         s[i,j,n] is at s[i * Ny * Nf + j * Nf + n] thus this line
-  //           starts at s + i * Ny * Nf + j * Nf, has length Nf, and has stride 1
+  //           starts at s + i * Ny * Nf + j * Nf + 0, has length Nf, and has stride 1
+  
   for(int i=0; i<Nx; i++)
     for(int j=0; j<Ny; j++){
       float kx = i < Nx/2 ?
@@ -192,10 +207,11 @@ int main(int argc, char** argv) {
 
       float n_interp[Nf];
       for(int n=0; n<Nf; n++){
-        float kz = kz_min + (kz_max - kz_min) * n/Nf;
+        float kz = kz_min + (kz_max - kz_min) * n/(Nf - 1);
         float k = 0.5 * sqrt(kx*kx + ky*ky + kz*kz);
-        n_interp[n] = (c*k/(2*pi) - f0)/Df;
+        n_interp[n] = (c_speed*k/(2*pi) - f0)/Df;
       }
+      
       resample_1d(s + i*Ny*Nf + j*Nf, Nf, 1, n_interp);
     }
 

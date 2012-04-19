@@ -20,36 +20,38 @@ N = size(A,3);
 disp('FFT done');
 
 %% Compute D
-[i j n] = meshgrid(0:Nx-1, 0:Ny-1, 0:N-1);
-  function Cijn = compute_C(i,j,n)
+D = zeros(size(A));
+for i = 0:Nx-1
+  for j = 0:Ny-1
+    for n = 0:N-1
+      if(i < Nx/2)
+        kx = i/Nx * 2*pi/Dx;
+      else
+        kx = (i-Nx)/Nx * 2*pi/Dx;
+      end
       
-    if(i < Nx/2)
-      kx = i/Nx * 2*pi/Dx;
-    else
-      kx = (i-Nx)/Nx * 2*pi/Dx;
+      if(j < Ny/2)
+        ky = j/Ny * 2*pi/Dy;
+      else
+        ky = (j-Ny)/Ny * 2*pi/Dy;
+      end
+      
+      k = 2*pi*(f0 + n*Df)/c;
+      kz = sqrt(4*k^2 - kx^2 - ky^2);
+      
+      % Equation from Concealed Weapon paper
+      Dijn = exp(-jj * kz * Z1);
+      
+      % Equation from SAR Seismic paper
+      % t0 = abs(2*Z1/c);
+      % Dijn = exp(-1j * (c*t0*k^2/2 - kz*abs(Z1))) * kz/k;
+      % Dijn = exp(-1j * (- kz*abs(Z1)));% * abs(kz/k);
+      
+      D(i+1, j+1, n+1) = A(i+1,j+1,n+1) * Dijn;
     end
-    
-    if(j < Ny/2)
-      ky = j/Ny * 2*pi/Dy;
-    else
-      ky = (j-Ny)/Ny * 2*pi/Dy;
-    end
-
-    k = 2*pi*(f0 + n*Df)/c;
-    kz = sqrt(4*k^2 - kx^2 - ky^2);
-    
-    % Equation from Concealed Weapon paper
-    Dijn = exp(-jj * kz * Z1);
-    
-    % Equation from SAR Seismic paper
-    % t0 = abs(2*Z1/c);
-    % Dijn = exp(-1j * (c*t0*k^2/2 - kz*abs(Z1))) * kz/k;
-    % Dijn = exp(-1j * (- kz*abs(Z1)));% * abs(kz/k);
-    
-    Cijn = A(i+1,j+1,n+1) * Dijn;
   end
-D = arrayfun(@compute_C, i, j, n);
-disp('C computed');
+end
+disp('D computed');
 
 %% Stolt Interpolation Indices
 f_max = f0 + (N-1)*Df;
