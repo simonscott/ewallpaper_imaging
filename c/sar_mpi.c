@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <math.h>
+#include <mpi.h>
 
 //================================================================================
 //==================== Network Functions =========================================
@@ -38,16 +39,107 @@ int receive_col(void* buffer)
 }
 
 //================================================================================
+//==================== Helper Functions ==========================================
+//================================================================================
+
+void check_mpi_result(int status)
+{
+  if(status == MPI_SUCCESS)
+    return;
+  else {
+    printf("MPI error code %d\n", status);
+    exit(-1);
+  }
+}
+
+//================================================================================
 //==================== The Main Function =========================================
 //================================================================================
 
 int main(int argc, char* argv[])
 {
   // Declare local variables
+  int N_proc, rank;
+  int N_proc_x, N_proc_y, proc_x, proc_y; // MPI processor grid
+  int N_thread_x, N_thread_y;             // Num threads per core
+  int i, j ,k, f, res, s_idx;
+
+  // Local arrays and buffers
+  complex* s;                             // The data to process
+  complex* pkt_buf;                       // The packet buffer
+  complex* file_buf;                      // For file ops on Node 0
 
   // MPI setup
+  MPI_Init( &argc, &argv );
+  MPI_Comm_size( MPI_COMM_WORLD, &N_proc );
+  MPI_Comm_rank( MPI_COMM_WORLD, &rank );
+
+  MPI_Datatype MPI_COMPLEX;
+  MPI_Type_contiguous(2, MPI_FLOAT, &MPI_COMPLEX);
+  MPI_Type_commit(&MPI_COMPLEX);
 
   // Determine position in 2D processor array
+  // Assume that the processors are y-major ordered
+  N_proc_x = N_proc_y = int(sqrt(N_proc));
+  
+  if(N_proc_x * N_proc_y != N_proc) {
+    printf("Error: N_proc is not a perfect square!\n");
+    return -1;
+  }
 
-  // 
+  proc_x = rank / N_proc_y;
+  proc_y = rank - proc_x * N_proc_y;
+
+  // Since there are fewer physical cores than eWallpaper chips, we need
+  // to use Pthreads to simulate the rest
+  N_thread_x = Nx / N_proc_x;
+  N_thread_y = Ny / N_proc_y;
+
+  // Create local memory for each simulated wallpaper chip
+  s = safe_malloc(Nf * N_thread_x * N_thread_y * sizeof(complex),
+                  "Failed to malloc memory for s");
+  pkt_buf = safe_malloc((Nf + 16) * N_thread_x * N_thread_y * sizeof(complex),
+                  "Failed to malloc memory for pkt_buf");
+
+  file_buf = safe_malloc(Nx * Ny * Nf * sizeof(complex),
+                  "Failed to malloc memory for file_buf");
+
+  // Node 0 reads the input file and broadcasts data to all other nodes
+  if(rank == 0)
+    read_data(file_buf, "scene_4.dat");
+
+  res = MPI_Bcast(file_buf, Nx * Ny * Nf, MPI_COMPLEX, 0, MPI_COMM_WORLD);
+  check_mpi_result(res);
+
+  // Extract just the data from the file that the local, simulated chips require
+  s_idx = 0;
+
+  for(i = 0; i < N_thread_x; i++)
+  {
+    int thread_x = proc_x * N_thread_x + i;
+
+    for(j = 0; j < N_thread_y; j++)
+    {
+      int thread_y = proc_y * N_thread_y + j;
+
+      for(f = 0; f < Nf; f++)
+      {
+        s[s_idx] = file_buf[thread_x * Ny * Nf + thread_y * Nf + f];
+        s_idx++;
+      }
+    }
+  }
+
+  // Launch the threads
+
+  // Wait until all threads have completed
+
+  // Node 0 gathers the results from all other nodes
+
+  // Node 0 writes the results to file
+
+  // Free allocated memory
+  free(s);
+  free(pkt_buf);
+  free(file_buf);
 }
