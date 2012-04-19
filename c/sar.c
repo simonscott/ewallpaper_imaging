@@ -202,4 +202,7 @@ void resample_1d(complex* x, int N, int stride, float* n) {
     }
     buffer[i] = x_interp;
   }
+
+  for(i=0; i<N; i++)
+    x[i*stride] = buffer[i];
 }
