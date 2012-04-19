@@ -20,23 +20,23 @@ N = size(A,3);
 disp('FFT done');
 
 %% Compute D
-[i j n] = meshgrid(1:Nx, 1:Ny, 1:N);
+[i j n] = meshgrid(0:Nx-1, 0:Ny-1, 0:N-1);
   function Cijn = compute_C(i,j,n)
       
-    if(i <= Nx/2)
+    if(i < Nx/2)
       kx = i/Nx * 2*pi/Dx;
     else
       kx = (i-Nx)/Nx * 2*pi/Dx;
     end
     
-    if(j <= Ny/2)
+    if(j < Ny/2)
       ky = j/Ny * 2*pi/Dy;
     else
       ky = (j-Ny)/Ny * 2*pi/Dy;
     end
 
-    k = 2*(2*pi*(f0 + n*Df)/c);
-    kz = sqrt(k^2 - kx^2 - ky^2);
+    k = 2*pi*(f0 + n*Df)/c;
+    kz = sqrt(4*k^2 - kx^2 - ky^2);
     
     % Equation from Concealed Weapon paper
     Dijn = exp(-jj * kz * Z1);
@@ -46,7 +46,7 @@ disp('FFT done');
     % Dijn = exp(-1j * (c*t0*k^2/2 - kz*abs(Z1))) * kz/k;
     % Dijn = exp(-1j * (- kz*abs(Z1)));% * abs(kz/k);
     
-    Cijn = A(i,j,n) * Dijn;
+    Cijn = A(i+1,j+1,n+1) * Dijn;
   end
 D = arrayfun(@compute_C, i, j, n);
 disp('C computed');
@@ -66,17 +66,17 @@ kz = linspace(kz_min, kz_max, N);
 n_valid_pts = zeros(Nx, Ny);
 ns = zeros(Nx, N);
 E = zeros(size(D));
-for i = 1:Nx
-  for j = 1:Ny
+for i = 0:Nx-1
+  for j = 0:Ny-1
     
     % Interpolation Indices
-    if(i <= Nx/2)
+    if(i < Nx/2)
       kx = i/Nx * 2*pi/Dx;
     else
       kx = (i-Nx)/Nx * 2*pi/Dx;
     end
     
-    if(j <= Ny/2)
+    if(j < Ny/2)
       ky = j/Ny * 2*pi/Dy;
     else
       ky = (j-Ny)/Ny * 2*pi/Dy;
@@ -85,10 +85,10 @@ for i = 1:Nx
     k = 0.5*sqrt(kx^2 + ky^2 + kz.^2);
     w = c*k;
     f = w/(2*pi);
-    n = (c*k/(2*pi) - f0)/Df + 1;
+    n = (c*k/(2*pi) - f0)/Df;
 
-    data = D(i,j,:);
-    E(i,j,:) = interp1( 1:N, data(:)', n, 'linear', 0 );
+    data = D(i+1,j+1,:);
+    E(i+1,j+1,:) = interp1( 1:N, data(:)', n + 1, 'linear', 0 );
   end
 end
 

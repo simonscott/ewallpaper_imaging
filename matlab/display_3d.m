@@ -48,7 +48,7 @@ if strcmp(display_method, 'sphere')
 % magnitude equal to the cutoff threshold
 elseif strcmp(display_method, 'isosurf')
 
-    p = patch(isosurface(image, threshold));
+    p = patch(isosurface(abs(image), threshold));
     isonormals(image, p);
     set(p, 'FaceColor', 'red', 'EdgeColor', 'none');
     alpha(0.5);
