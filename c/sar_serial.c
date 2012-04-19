@@ -16,11 +16,13 @@ void read_data(complex* data, char* filename){
   }
   
   int n = 0;
+  int i, j, k, res;
   complex num;
-  for(int i=0; i < Nx; i++)
-    for(int j=0; j < Ny; j++)
-      for(int k=0; k < Nf; k++){
-        fscanf(file, "%f, %f\n", &num.real, &num.imag);
+
+  for(i=0; i < Nx; i++)
+    for(j=0; j < Ny; j++)
+      for(k=0; k < Nf; k++){
+        res = fscanf(file, "%f, %f\n", &num.real, &num.imag);
         data[n] = num;
         n++;
       }
@@ -31,11 +33,13 @@ void read_data(complex* data, char* filename){
 // Outputs the matrix in data to the file specified by "filename".
 // Formats the file in the same format that it was written in as per above.
 void write_data(complex* data, char* filename){
+  int i, j, k;
   FILE* file = fopen(filename, "w");
   int n = 0;
-  for(int i=0; i<Nx; i++)
-    for(int j=0; j<Ny; j++)
-      for(int k=0; k<Nf; k++){
+
+  for(i=0; i<Nx; i++)
+    for(j=0; j<Ny; j++)
+      for(k=0; k<Nf; k++){
         fprintf(file, "%f, %f\n", data[n].real, data[n].imag);
         n++;
       }
@@ -64,9 +68,11 @@ void* safe_malloc(int size, char* error_message) {
 //    Element x[i,j] is located at x[i * x_stride + j * y_stride]
 //    So each column starts at x + i * x_stride + 0 * y_stride, has length ny, and stride y_stride
 void fft_2d(complex* x, int nx, int ny, int x_stride, int y_stride) {
-  for(int j=0; j<ny; j++)
+  int i, j;
+
+  for(j=0; j<ny; j++)
     fft_1d(x + j * y_stride, nx, x_stride);
-  for(int i=0; i<nx; i++)
+  for(i=0; i<nx; i++)
     fft_1d(x + i * x_stride, ny, y_stride);
 }
 
@@ -79,9 +85,11 @@ void fft_2d(complex* x, int nx, int ny, int x_stride, int y_stride) {
 //    Element x[i,j] is located at x[i * x_stride + j * y_stride]
 //    So each column starts at x + i * x_stride + 0 * y_stride, has length ny, and stride y_stride
 void ifft_2d(complex* x, int nx, int ny, int x_stride, int y_stride) {
-  for(int j=0; j<ny; j++)
+  int i, j;
+
+  for(j=0; j<ny; j++)
     ifft_1d(x + j * y_stride, nx, x_stride);
-  for(int i=0; i<nx; i++)
+  for(i=0; i<nx; i++)
     ifft_1d(x + i * x_stride, ny, y_stride);
 }
 
@@ -92,24 +100,33 @@ void ifft_2d(complex* x, int nx, int ny, int x_stride, int y_stride) {
 // 2. Perform 1D IFFTs along z axis
 //    Each line starts at x + i * x_stride + j * y_stride + 0 * z_stride
 void ifft_3d(complex* x, int nx, int ny, int nz, int x_stride, int y_stride, int z_stride) {
-  for(int k=0; k<nz; k++)
+  int i, j, k;
+
+  for(k=0; k<nz; k++)
     ifft_2d(x + k * z_stride, nx, ny, x_stride, y_stride);
-  for(int i=0; i<nx; i++)
-    for(int j=0; j<ny; j++)
+
+  for(i=0; i<nx; i++)
+    for(j=0; j<ny; j++)
       ifft_1d(x + i * x_stride + j * y_stride, nz, z_stride);
 }
 
 void print_snippet(complex* x){
-  for(int i=0; i<4; i++)
-    for(int j=0; j<4; j++)
-      for(int k=0; k<4; k++){
+  int i, j, k;
+
+  for(i=0; i<4; i++)
+    for(j=0; j<4; j++)
+      for(k=0; k<4; k++){
         c_print(x[i*Ny*Nf + j*Nf + k]);
         printf("\n");
       }
+
   printf("\n");
 }
 
 int main(int argc, char** argv) {  
+  // Declare local variables
+  int i, j, n;
+
   // Read in data
   // 1. allocate buffer space for the data. Holds Nx * Ny * Nf complex numbers.
   // 2. pass the filename and buffer to read_data which will read the file
@@ -122,7 +139,7 @@ int main(int argc, char** argv) {
   // Each element s[i,j,n] is located at s[i * Ny * Nf + j * Nf + n]
   // Thus x-stride = Ny*Nf, y-stride = Nf, and z-stride = 1
   // and each xy plane starts at s + 0 * Ny * Nf + 0 * Nf + n
-  for(int n=0; n<Nf; n++)
+  for(n=0; n<Nf; n++)
     fft_2d(s + n, Nx, Ny, Ny*Nf, Nf);
 
   // Multiply each element in the frequency-domain signal by the
@@ -143,9 +160,9 @@ int main(int argc, char** argv) {
   //        phi = exp(j * kz * z0)
   // 5.   multiply the signal with the phase delay
   //        where s(i,j,k) = s[i * Ny * Nf + j * Nf + n]
-  for(int i=0; i<Nx; i++)
-    for(int j=0; j<Ny; j++)
-      for(int n=0; n<Nf; n++){
+  for(i=0; i<Nx; i++)
+    for(j=0; j<Ny; j++)
+      for(n=0; n<Nf; n++){
         float kx = i < Nx/2 ?
           2*pi/Dx * i/Nx :
           2*pi/Dx * (i - Nx)/Nx;
@@ -196,8 +213,8 @@ int main(int argc, char** argv) {
   //         s[i,j,n] is at s[i * Ny * Nf + j * Nf + n] thus this line
   //           starts at s + i * Ny * Nf + j * Nf + 0, has length Nf, and has stride 1
   
-  for(int i=0; i<Nx; i++)
-    for(int j=0; j<Ny; j++){
+  for(i=0; i<Nx; i++)
+    for(j=0; j<Ny; j++){
       float kx = i < Nx/2 ?
         2*pi/Dx * i/Nx :
         2*pi/Dx * (i - Nx)/Nx;
@@ -206,7 +223,7 @@ int main(int argc, char** argv) {
         2*pi/Dy * (j - Ny)/Ny;
 
       float n_interp[Nf];
-      for(int n=0; n<Nf; n++){
+      for(n=0; n<Nf; n++){
         float kz = kz_min + (kz_max - kz_min) * n/(Nf - 1);
         float k = 0.5 * sqrt(kx*kx + ky*ky + kz*kz);
         n_interp[n] = (c_speed*k/(2*pi) - f0)/Df;

@@ -82,11 +82,13 @@ void c_print(complex x) {
 //          y[k + N/2] = y[k] + Wkn * y[k + N/2]
 // otherwise just return the element at x[0]
 void fft_1d_helper(complex* x, int N, int stride, complex* y){
+    int k;
+
   if(N > 1) {
     fft_1d_helper(x, N/2, 2*stride, y);
     fft_1d_helper(x + stride, N/2, 2*stride, y + N/2);
     
-    for(int k=0; k<N/2; k++) {
+    for(k=0; k<N/2; k++) {
       complex Wkn1 = c_jexp(-2*pi/N * k);
       complex Wkn2 = c_jexp(-2*pi/N * (k + N/2));
       complex yk1 = c_add(y[k], c_mult(Wkn1, y[k + N/2]));
@@ -104,9 +106,12 @@ void fft_1d_helper(complex* x, int N, int stride, complex* y){
 // 2. use fft_1d and compute the fft of x and store it into the temporary buffer
 // 3. copy the contents of the temporary buffer to x, with the appropriate stride
 void fft_1d(complex* x, int N, int stride){
+  int i;
   complex buffer[N];
+
   fft_1d_helper(x, N, stride, buffer);
-  for(int i=0; i<N; i++)
+
+  for(i=0; i<N; i++)
     x[i*stride] = buffer[i];
 }
 
@@ -132,11 +137,13 @@ void fft_1d(complex* x, int N, int stride){
 // otherwise just return the element at x[0]
 // Note that ifft_1d_helper does *not* do the appropriate 1/N scaling. 
 void ifft_1d_helper(complex* x, int N, int stride, complex* y){
+  int k;
+
   if(N > 1) {
     ifft_1d_helper(x, N/2, 2*stride, y);
     ifft_1d_helper(x + stride, N/2, 2*stride, y + N/2);
     
-    for(int k=0; k<N/2; k++) {
+    for(k=0; k<N/2; k++) {
       complex Wkn1 = c_jexp(2*pi/N * k);
       complex Wkn2 = c_jexp(2*pi/N * (k + N/2));
       complex yk1 = c_add(y[k], c_mult(Wkn1, y[k + N/2]));
@@ -155,9 +162,12 @@ void ifft_1d_helper(complex* x, int N, int stride, complex* y){
 // 3. copy the contents of the temporary buffer to x, with the appropriate stride and
 //    divide every element by N (because ifft_helper does not do that step).
 void ifft_1d(complex* x, int N, int stride){
+  int i;
   complex buffer[N];
+
   ifft_1d_helper(x, N, stride, buffer);
-  for(int i=0; i<N; i++)
+
+  for(i=0; i<N; i++)
     x[i*stride] = c_scalar_div(buffer[i], N);
 }
 
@@ -176,8 +186,10 @@ void ifft_1d(complex* x, int N, int stride){
 // 8.   store the interpolated value into the buffer
 // 9. copy the values from the temporary buffer back into x
 void resample_1d(complex* x, int N, int stride, float* n) {  
+  int i;
   complex buffer[N];
-  for(int i=0; i<N; i++){
+
+  for(i=0; i<N; i++){
     complex x_interp;
     if(n[i] < 0 || n[i] > N - 1){
       x_interp.real = 0;
