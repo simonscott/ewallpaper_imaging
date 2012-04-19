@@ -1,0 +1,4 @@
+1. Make FFT more efficient (iterative?).
+2. Precompute the complex exponentials for the FFT.
+3. Precompute the phase shifts for the interpolation.
+4. Change code to use exclusive endpoints (e.g. for kx_max, ky_max, and kz_min, kz_max)
