@@ -249,9 +249,11 @@ void write_data(complex* data, char* filename){
   for(i=0; i<Nx; i++)
     for(j=0; j<Ny; j++)
       for(k=0; k<Nf; k++){
+        complex x = data[i * Ny * Nf + j * Nf + k];
         fprintf(file, "%f, %f\n", data[n].real, data[n].imag);
         n++;
       }
+  
   fclose(file);
 }
 

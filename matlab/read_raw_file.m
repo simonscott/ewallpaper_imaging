@@ -12,14 +12,8 @@ if f == -1
 end
 
 [values, count] = fscanf(f, '%f, %f\n');
-
-for x = 1:Nx
-  for y = 1:Ny
-    for z = 1:Nz
-      data(x, y, z) = values(n) + j*values(n+1);
-      n = n + 2;
-    end
-  end
-end
+data = values(1:2:end) + j*values(2:2:end);
+data = reshape(data, [Nz Ny Nx]);
+data = permute(data, [3 2 1]);
 
 fclose(f);

@@ -54,19 +54,6 @@ void ifft_3d(complex* x, int nx, int ny, int nz, int x_stride, int y_stride, int
       ifft_1d(x + i * x_stride + j * y_stride, nz, z_stride);
 }
 
-void print_snippet(complex* x){
-  int i, j, k;
-
-  for(i=0; i<4; i++)
-    for(j=0; j<4; j++)
-      for(k=0; k<4; k++){
-        c_print(x[i*Ny*Nf + j*Nf + k]);
-        printf("\n");
-      }
-
-  printf("\n");
-}
-
 int main(int argc, char** argv) {  
   // Declare local variables
   int i, j, n;
@@ -156,7 +143,6 @@ int main(int argc, char** argv) {
   // 6.   resample this line in s on interpolated indices n_interp
   //         s[i,j,n] is at s[i * Ny * Nf + j * Nf + n] thus this line
   //           starts at s + i * Ny * Nf + j * Nf + 0, has length Nf, and has stride 1
-  
   for(i=0; i<Nx; i++)
     for(j=0; j<Ny; j++){
       float kx = i < Nx/2 ?
