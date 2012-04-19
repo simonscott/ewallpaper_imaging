@@ -68,6 +68,7 @@ kz = linspace(kz_min, kz_max, N);
 n_valid_pts = zeros(Nx, Ny);
 ns = zeros(Nx, N);
 E = zeros(size(D));
+
 for i = 0:Nx-1
   for j = 0:Ny-1
     
@@ -90,7 +91,7 @@ for i = 0:Nx-1
     n = (c*k/(2*pi) - f0)/Df;
 
     data = D(i+1,j+1,:);
-    E(i+1,j+1,:) = interp1( 1:N, data(:)', n + 1, 'linear', 0 );
+    E(i+1,j+1,:) = interp1( 1:N, data(:).', n + 1, 'linear', 0 );
   end
 end
 
