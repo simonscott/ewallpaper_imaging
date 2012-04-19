@@ -3,8 +3,12 @@
 #include <stdio.h>
 #include <math.h>
 
-//Initialize the simulation
-void init_simulation(complex* data, char* filename){
+// Reads in the file specified by "filename" and stores the data in "data"
+// Assumes that the file is formatted as real, imag on each line like so:
+// 10.41241, 124.152
+// 124.1241, 123.15124
+// where the iteration order is Nx * Ny * Nf (Nf being the fastest varying index)
+void read_data(complex* data, char* filename){
   FILE* file = fopen(filename, "r");
   
   int n = 0;
@@ -20,6 +24,23 @@ void init_simulation(complex* data, char* filename){
   fclose(file);
 }
 
+// Outputs the matrix in data to the file specified by "filename".
+// Formats the file in the same format that it was written in as per above.
+void write_data(complex* data, char* filename){
+  FILE* file = fopen(filename, "w");
+  int n = 0;
+  for(int i=0; i<Nx; i++)
+    for(int j=0; j<Ny; j++)
+      for(int k=0; k<Nf; k++){
+        fprintf(file, "%f, %f\n", data[n].real, data[n].imag);
+        n++;
+      }
+  fclose(file);
+}
+
+// Safely allocate a block of memory
+// Internally calls malloc to allocate memory
+// If malloc fails, then error_message is printed out and the program is aborted.
 void* safe_malloc(int size, char* error_message){
   void* a = malloc(size);
   if(!a){
@@ -30,32 +51,65 @@ void* safe_malloc(int size, char* error_message){
   return a;
 }
 
+// Perform a single 2D FFT by performing Nx+Ny 1D FFTs
+// fft_2d(complex* x, int Nx, int Ny, int x_stride, int y_stride)
+// 1. Perform 1D FFTs along rows
+//    Element x[i,j] is located at x[i * x_stride + j * y_stride]
+//    So each row starts at x + 0 * x_stride + j * y_stride, has length Nx, and stride x_stride
+// 2. Perform 1D FFTs along columns
+//    Element x[i,j] is located at x[i * x_stride + j * y_stride]
+//    So each column starts at x + i * x_stride + 0 * y_stride, has length Ny, and stride y_stride
+void fft_2d(complex* x, int Nx, int Ny, int x_stride, int y_stride) {
+  for(int i=0; i<Nx; i++)
+    fft_1d_in_place(x + j * y_stride, Nx, x_stride);
+  for(int j=0; j<Ny; j++)
+    fft_1d_in_place(x + i * x_stride, Ny, y_stride);
+}
+
+// Perform a single 2D IFFT by performing Nx+Ny 1D IFFTs
+// ifft_2d(complex* x, int Nx, int Ny, int x_stride, int y_stride)
+// 1. Perform 1D IFFTs along rows
+//    Element x[i,j] is located at x[i * x_stride + j * y_stride]
+//    So each row starts at x + 0 * x_stride + j * y_stride, has length Nx, and stride x_stride
+// 2. Perform 1D IFFTs along columns
+//    Element x[i,j] is located at x[i * x_stride + j * y_stride]
+//    So each column starts at x + i * x_stride + 0 * y_stride, has length Ny, and stride y_stride
+void ifft_2d(complex* x, int Nx, int Ny, int x_stride, int y_stride) {
+  for(int i=0; i<Nx; i++)
+    ifft_1d_in_place(x + j * y_stride, Nx, x_stride);
+  for(int j=0; j<Ny; j++)
+    ifft_1d_in_place(x + i * x_stride, Ny, y_stride);
+}
+
+// Perform a single 3D IFFT by performing NZ 2D IFFTs followed by Nx*Ny 1D IFFTs
+// 1. Perform 2D IFFTs along xy planes
+//    Element x[i,j] is located at x[i * x_stride + j * y_stride + k * z_stride]
+//    So each plane starts at x + 0 * x_stride + 0 * y_stride + k * z_stride
+// 2. Perform 1D IFFTs along z axis
+//    Each line starts at x + i * x_stride + j * y_stride + 0 * z_stride
+void ifft_3d(complex* x, int Nx, int Ny, int Nz, int x_stride, int y_stride, int z_stride) {
+  for(int k=0; k<Nz; k++)
+    ifft_2d(x + k * z_stride, Nx, Ny, x_stride, y_stride);
+  for(int i=0; i<Nx; i++)
+    for(int j=0; j<Ny; j++)
+      ifft_1d_in_place(x + i * x_stride + j * y_stride, Nz, z_stride);
+}
+
 int main(int argc, char** argv) {
   // Read in data
   // 1. allocate buffer space for the data. Holds Nx * Ny * Nf complex numbers.
-  // 2. pass the filename and buffer to init_simulation which will read the file
+  // 2. pass the filename and buffer to read_data which will read the file
   //    into the buffer.
   complex* s = (complex*)safe_malloc(Nx * Ny * Nf * sizeof(complex),
                          "Failed to allocate memory for radar data.");  
-  init_simulation(s, "scene_1.dat");  
+  read_data(s, "scene_1.dat");  
 
   // Perform a single 2D FFT for each frequency
-  // 1. First do a 1D FFT across each of the Ny rows
-  // 2. Then do a 1D FFT across each of the Nx columns
-  for(int n = 0; n < Nf; n++){    
-    // Perform 1D FFTs along rows
-    // 1. Raster order for s is Nx x Ny x Nf
-    //    so s[i,j,n] = s[i * Ny * Nf + j * Nf + n]
-    // 2. each row starts at (s + j * Nf + n), has length Nx, and stride (Ny * Nf).
-    for(int j=0; j<Ny; j++)
-      fft_1d_in_place(s + j*Nf + n, Nx, Ny*Nf);
-
-    // Perform 1D FFTs along columns
-    // 1. s[i,j,n] = s[i * Ny * Nf + j * Nf + n]
-    // 2. each column starts at (s + i*Ny*Nf + n) has length Ny, and stride (Nf).
-    for(int i=0; i<Nx; i++)
-      fft_1d_in_place(s + i*Ny*Nf + n, Ny, Nf);
-  }
+  // Each element s[i,j,n] is located at s[i * Ny * Nf + j * Nf + n]
+  // Thus x-stride = Ny*Nf, y-stride = Nf, and z-stride = 1
+  // and each xy plane starts at s + 0 * Ny * Nf + 0 * Nf + n
+  for(int n=0; n<Nf; n++)
+    fft_2d(s + n, Nx, Ny, Ny*Nf, Nf);
 
   // Multiply each element in the frequency-domain signal by the
   // downward continuation phase operator.
@@ -118,23 +172,15 @@ int main(int argc, char** argv) {
   // 1. for each step in the x direction, i in 0 ... Nx
   //    and each step in the y direction, j in 0 ... Ny
   // 2.   compute kx, and ky as per step 2. above
-  // 3.   for each step in frequency, n in 0 ... Nf
+  // 3.   create float buffer of size Nf for storing the interpolation indices, n_interp
+  // 4.   for each step in frequency, n in 0 ... Nf
   //         compute kz = kz_min + (kz_max - kz_min) * n/Nf
   // 4.      compute desired k = 0.5 * sqrt(kx^2 + ky^2 + kz^2)
   // 5.      which corresponds to the interpolated array element
-  //            n_interp = (c*k/(2*pi) - f0)/Df
-  // 6.      if n_interp lies outside of the range 0 ... Nf, then the interpolated signal is 0
-  // 7.      otherwise, compute the interpolated signal :
-  // 8.         retrieve the lower element at
-  //               s_low = s[i,j,floor(n_interp)] = s[i * Ny * Nf + j * Nf + floor(n_interp)]
-  //            retrieve the higher element at
-  //               s_high = s[i,j,ceil(n_interp)] = s[i * Ny * Nf + j * Nf + ceil(n_interp)]
-  //            interpolate between s_low and s_high
-  //               ratio = n_interp - floor(n_interp)
-  //               s_interp = ratio * s_low + (1 - ratio) * s_high
-  // 9.      store the interpolated signal, s_interp, into s[i,j,n]
-
-  // [ERROR] : We cannot update s in place, we need a temporary buffer
+  //            n_interp[n] = (c*k/(2*pi) - f0)/Df
+  // 6.   resample this line in s on interpolated indices n_interp
+  //         s[i,j,n] is at s[i * Ny * Nf + j * Nf + n] thus this line
+  //           starts at s + i * Ny * Nf + j * Nf, has length Nf, and has stride 1
   for(int i=0; i<Nx; i++)
     for(int j=0; j<Ny; j++){
       float kx = i < Nx/2 ?
@@ -144,58 +190,23 @@ int main(int argc, char** argv) {
         2*pi/Dy * j/Ny :
         2*pi/Dy * (j - Ny)/Ny;
 
+      float n_interp[Nf];
       for(int n=0; n<Nf; n++){
         float kz = kz_min + (kz_max - kz_min) * n/Nf;
         float k = 0.5 * sqrt(kx*kx + ky*ky + kz*kz);
-        float n_interp = (c*k/(2*pi) - f0)/Df;
-        
-        complex s_interp;
-        if(n_interp < 0 || ceil(n_interp) >= Nf) {
-          s_interp.real = 0;
-          s_interp.imag = 0;
-        } else {
-          complex s_low = s[i * Ny * Nf + j * Nf + (int)floor(n_interp)];
-          complex s_high = s[i * Ny * Nf + j * Nf + (int)ceil(n_interp)];
-          float ratio = n_interp - floor(n_interp);
-          s_interp.real = ratio * s_low.real + (1 - ratio) * s_high.real;
-          s_interp.imag = ratio * s_low.imag + (1 - ratio) * s_high.imag;
-          s[i * Ny * Nf + j * Nf + n] = s_interp;
-        }
+        n_interp[n] = (c*k/(2*pi) - f0)/Df;
       }
+      resample_1d(s + i*Ny*Nf + j*Nf, Nf, 1, n_interp);
     }
 
-  // Perform an inverse 3D IFFT on the signal
-  // 1. First do a 1D IFFT across each of the Ny rows
-  // 2. Then do a 1D IFFT across each of the Nx columns
-  // 3. Then do a 1D IFFT across each of the Nz lines
-
-  // For each frequency n
-  for(int n = 0; n < Nf; n++){    
-    // Perform 1D IFFTs along rows
-    // 1. Raster order for s is Nx x Ny x Nf
-    //    so s[i,j,n] = s[i * Ny * Nf + j * Nf + n]
-    // 2. each row starts at (s + j * Nf + n), has length Nx, and stride (Ny * Nf).
-    for(int j=0; j<Ny; j++)
-      ifft_1d_in_place(s + j*Nf + n, Nx, Ny*Nf);
-
-    // Perform 1D IFFTs along columns
-    // 1. s[i,j,n] = s[i * Ny * Nf + j * Nf + n]
-    // 2. each column starts at (s + i*Ny*Nf + n) has length Ny, and stride (Nf).
-    for(int i=0; i<Nx; i++)
-      ifft_1d_in_place(s + i*Ny*Nf + n, Ny, Nf);
-  }
-
-  // For each row, i, and column, j
-  // 1. s[i,j,n] = s[i * Ny * Nf + j * Nf + n]
-  // 2. each line starts at (s + i * Ny * Nf + j * Nf) has length Nf, and stride 1.
-  for(int i=0; i<Nx; i++)
-    for(int j=0; j<Ny; j++)
-      ifft_1d_in_place(s + i * Ny * Nf + j * Nf, Nf, 1);
-
+  // Perform a 3D IFFT on the signal
+  // Each element s[i,j,n] is located at s[i * Ny * Nf + j * Nf + n]
+  // Thus x-stride = Ny*Nf, y-stride = Nf, and z-stride = 1
+  ifft_3d(s, Nx, Ny, Nf, Ny*Nf, Nf, 1);
 
   // End the simulation by writing out the computed signal and write it out to a file.
-  // Pass the computed matrix and a output filename to end_simulation()
-  end_simulation(s, "scene_4.out");
+  // Pass the computed matrix and a output filename to write_data()
+  write_data(s, "scene_4.out");
 
   // Free all the temporary memory
   free(s);

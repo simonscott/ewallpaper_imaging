@@ -17,22 +17,22 @@ typedef struct {
 complex c_mult(complex x, complex y);
 complex c_add(complex x, complex y);
 complex c_jexp(float theta);
+complex c_scalar_mult(complex x, float a);
+complex c_scalar_div(complex x, float a);
 void c_print(complex x);
 
 //Signal Processing Functions
-void fft_1d(complex* x, int N, int stride, complex* y);
-void ifft_1d(complex* x, int N, int stride, complex* y);
-void fft_1d_in_place(complex* x, int N, int stride);
-void ifft_1d_in_place(complex* x, int N, int stride);
+void fft_1d(complex* x, int N, int stride);
+void ifft_1d(complex* x, int N, int stride);
+void resample_1d(complex* x, int N, int stride, float* n);
 
 //Application Specific Math
-//void interp_1d(complex* x, int n, ?);
 void precompute_phase_shifts(complex* x, int n);
 void element_wise_mult(complex* x, complex* y, int n);
 
 //Simulation setup and teardown
-void init_simulation(complex* data, char* filename);
-void end_simulation();
+void read_data(complex* data, char* filename);
+void write_data(complex* data, char* filename);
 
 //Physical Constants
 #define c_speed 299792458
