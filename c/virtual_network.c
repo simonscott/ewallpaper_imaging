@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include <pthread.h>
 #include <stdio.h>
+#include <string.h>
 #include "virtual_network.h"
 
 //================================================================================
@@ -44,7 +45,8 @@ void init_processor(int i, processor_main_function main_function){
   processors[i].inbox_top = malloc(message_memory);
 
   //Start Thread
-  pthread_create(&processors[i].thread, NULL, main_function, (void*)i);
+  void* (*thread_entry)(void*) = (void* (*)(void*))main_function;
+  pthread_create(&processors[i].thread, NULL, thread_entry, (void*)i);
 }
 
 void wait_for_messages(processor* p){
@@ -62,8 +64,9 @@ void add_message(int i, void* message, int size){
   }
 
   if(p->num_messages > 0){
-    void* end_of_memory = p->messages[0] + message_memory;
-    if(p->inbox_top + size >= end_of_memory){
+    long end_of_memory = (long)p->messages[0] + message_memory;
+    long requested_end = (long)p->inbox_top + size;
+    if(requested_end >= end_of_memory){
       printf("Message buffer memory exceeded on processor %d\n", i);
       exit(-1);
     }
@@ -72,7 +75,7 @@ void add_message(int i, void* message, int size){
   p->messages[p->num_messages] = p->inbox_top;
   p->num_messages++;
   memcpy(p->inbox_top, message, size);
-  p->inbox_top += size;  
+  p->inbox_top = (void*)((long)p->inbox_top + size);  
 }
 
 void send_message(int i, void* message, int size){
@@ -111,11 +114,13 @@ void free_message(int i, void* message){
     p->num_messages = 0;
   }
   else {
-    int message_1_size = p->messages[1] - p->messages[0];
-    memcpy(p->messages[0], p->messages[1], p->inbox_top - p->messages[1]);
+    int copy_size = (long)p->inbox_top - (long)p->messages[1];
+    memcpy(p->messages[0], p->messages[1], copy_size);
+    
+    int message_1_size = (long)p->messages[1] - (long)p->messages[0];
     for(int i=0; i<p->num_messages-1; i++)
-      p->messages[i] = p->messages[i+1] - message_1_size;
-    p->inbox_top -= message_1_size;
+      p->messages[i] = (void*)((long)p->messages[i+1] - message_1_size);
+    p->inbox_top = (void*)((long)p->inbox_top - message_1_size);
   }
 }
 

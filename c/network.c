@@ -11,7 +11,7 @@ void* processor_main(int MYTHREAD){
     send_message(1, &message_out, sizeof(int));
     printf("Thread 0 waits for thread 1\n");
     
-    int* message = receive_message(MYTHREAD);
+    int* message = (int*)receive_message(MYTHREAD);
     printf("message = %d\n", *message);
     
     printf("Thread 0 Finished.\n");
@@ -29,6 +29,8 @@ void* processor_main(int MYTHREAD){
     send_message(0, &message_out, sizeof(int));
     printf("Thread 1 FInished\n");
   }
+
+  return 0;
 }
 
 int main(){
