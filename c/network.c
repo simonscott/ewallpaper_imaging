@@ -3,31 +3,48 @@
 #include <pthread.h>
 #include "virtual_network.h"
 
+// Example of two processors bouncing a message around
 void* processor_main(int MYTHREAD){
-  printf("MYTHREAD = %d\n", MYTHREAD);
+  int N = 100;
   
   if(MYTHREAD == 0){
-    int message_out = 42;
-    send_message(1, &message_out, sizeof(int));
-    printf("Thread 0 waits for thread 1\n");
+    int buffer[] = {0};
+    send_message(1, (char*)buffer, sizeof(int));
     
-    int* message = (int*)receive_message(MYTHREAD);
-    printf("message = %d\n", *message);
-    
-    printf("Thread 0 Finished.\n");
+    while(1) {
+      // Receive message
+      int* message = (int*)receive_message(MYTHREAD);
+      buffer[0] = *message;
+      free_message(MYTHREAD, (char*)message);
+      // Process Message
+      printf("Thread 0 increments counter from %d to %d\n", buffer[0], buffer[0]+1);
+      // Send to Destination
+      if(buffer[0] < N){
+        buffer[0] = buffer[0] + 1;
+        send_message(1, (char*)buffer, sizeof(int));
+      }
+      else {
+        break;
+      }
+    }
   }
-
+  
   if(MYTHREAD == 1){
-    for(int i=0; i<10; i++)
-      printf("Thread 1 working: %d\n", i);
+    int buffer[1];
     
-    int* message = (int*)receive_message(MYTHREAD);
-    printf("THREAD 1: message = %d\n", *message);
-    free_message(MYTHREAD, message);
-
-    int message_out = -42;
-    send_message(0, &message_out, sizeof(int));
-    printf("Thread 1 FInished\n");
+    while(1){
+      // Receive message
+      int* message = (int*)receive_message(MYTHREAD);
+      buffer[0] = *message;
+      free_message(MYTHREAD, (char*)message);
+      // Process message
+      printf("Thread 1 increments counter from %d to %d\n", buffer[0], buffer[0]+1);
+      // Send to Destination
+      buffer[0] += 1;
+      send_message(0, (char*)buffer, sizeof(int));
+      if(buffer[0] >= N)
+        break;
+    }
   }
 
   return 0;
