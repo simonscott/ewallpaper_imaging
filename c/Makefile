@@ -1,6 +1,6 @@
 CC = CC
 MPCC = CC
-CFLAGS = -O3
+CFLAGS = -O3 -c99
 LIBS = -lm
 
 TARGETS = sar_serial sar_mpi
