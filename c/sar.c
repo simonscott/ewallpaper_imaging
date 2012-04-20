@@ -225,13 +225,13 @@ void read_data(complex* data, char* filename){
   }
   
   int n = 0;
-  int i, j, k, res;
+  int i, j, k;
   complex num;
 
   for(i=0; i < Nx; i++)
     for(j=0; j < Ny; j++)
       for(k=0; k < Nf; k++){
-        res = fscanf(file, "%f, %f\n", &num.real, &num.imag);
+        fscanf(file, "%f, %f\n", &num.real, &num.imag);
         data[n] = num;
         n++;
       }
@@ -249,7 +249,6 @@ void write_data(complex* data, char* filename){
   for(i=0; i<Nx; i++)
     for(j=0; j<Ny; j++)
       for(k=0; k<Nf; k++){
-        complex x = data[i * Ny * Nf + j * Nf + k];
         fprintf(file, "%f, %f\n", data[n].real, data[n].imag);
         n++;
       }
