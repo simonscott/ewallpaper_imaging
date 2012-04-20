@@ -101,7 +101,7 @@ int main(int argc, char* argv[])
   void* status;
 
   // Local arrays and buffers
-  complex* recv_buf, file_buf;              // For file ops on Node 0
+  complex *recv_buf, *file_buf;              // For file ops on Node 0
   
   // MPI setup
   MPI_Init(&argc, &argv);
@@ -201,17 +201,22 @@ int main(int argc, char* argv[])
   if(rank == 0)
   {
     // First rearrange the data
-    n = 0;
+    s_idx = 0;
     for(i = 0; i < Nx; i++)
     {
-      //int mpi_proc_x = ;
+      int mpi_proc_x = i * N_proc_x / Nx;
+
       for(j = 0; j < Ny; j++)
       {
-        //int mpi_proc_y = ;
+        int mpi_proc_y = j * N_proc_y / Ny;
+        int mpi_proc_rank = mpi_proc_x * N_proc_y + mpi_proc_y;
+
         for(f = 0; f < Nf; f++)
         {
-          //file_buf[n] = recv_buf();
-          n++;
+          int offset = mpi_proc_rank * N_thread_x * N_thread_y * Nf;
+          offset += 0; // TODO
+          file_buf[s_idx] = recv_buf[offset];
+          s_idx++;
         }
       }
     }
