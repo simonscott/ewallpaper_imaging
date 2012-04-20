@@ -1,2 +1,4 @@
 c/sar_serial
+c/sar_mpi
 c/*.o
+c/*.stdout

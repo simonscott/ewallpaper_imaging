@@ -202,21 +202,21 @@ int main(int argc, char* argv[])
   {
     // First rearrange the data
     s_idx = 0;
-    for(i = 0; i < Nx; i++)
-    {
-      int mpi_proc_x = i * N_proc_x / Nx;
+    for(int mpi_proc_x = 0; mpi_proc_x < N_proc_x; mpi_proc_x++) {
+      for(int pthread_x = 0; pthread_x < N_thread_x; pthread_x++) {
+        for(int mpi_proc_y = 0; mpi_proc_y < N_proc_y; mpi_proc_y++) {
+          for(int pthread_y = 0; pthread_y < N_thread_y; pthread_y++) {
 
-      for(j = 0; j < Ny; j++)
-      {
-        int mpi_proc_y = j * N_proc_y / Ny;
-        int mpi_proc_rank = mpi_proc_x * N_proc_y + mpi_proc_y;
+            int offset = mpi_proc_x * N_proc_y * N_thread_x * N_thread_y * Nf +
+                         mpi_proc_y * N_thread_x * N_thread_y * Nf +
+                         pthread_x * N_thread_y * Nf + pthread_y * Nf;
 
-        for(f = 0; f < Nf; f++)
-        {
-          int offset = mpi_proc_rank * N_thread_x * N_thread_y * Nf;
-          offset += 0; // TODO
-          file_buf[s_idx] = recv_buf[offset];
-          s_idx++;
+            for(f = 0; f < Nf; f++)
+            {
+              file_buf[s_idx] = recv_buf[offset + f];
+              s_idx++;
+            }
+          }
         }
       }
     }
