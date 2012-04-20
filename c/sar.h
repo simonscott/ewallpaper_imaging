@@ -40,9 +40,14 @@ complex c_scalar_mult(complex x, float a);
 complex c_scalar_div(complex x, float a);
 void c_print(complex x);
 
+//Precomputations
+#define maximum_fft_size 256
+complex* precompute_fft_coefficients();
+complex* precompute_ifft_coefficients();
+
 //Signal Processing Functions
-void fft_1d(complex* x, int N, int stride);
-void ifft_1d(complex* x, int N, int stride);
+void fft_1d(complex* x, int N, int stride, complex* Wkn);
+void ifft_1d(complex* x, int N, int stride, complex* Wkn);
 void resample_1d(complex* x, int N, int stride, float* n);
 
 //Application Specific Math
@@ -55,5 +60,9 @@ void write_data(complex* data, char* filename);
 
 //Memory allocation and deallocation
 void* safe_malloc(int size, char* error_message);
+
+//Timing Functions
+void tick();
+void tock();
 
 #endif

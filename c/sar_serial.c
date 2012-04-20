@@ -2,6 +2,11 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <math.h>
+#include <string.h>
+
+// Precomputed fft and ifft coefficients
+complex* Wkn_fft;
+complex* Wkn_ifft;
 
 // Perform a single 2D FFT by performing nx+ny 1D FFTs
 // fft_2d(complex* x, int nx, int ny, int x_stride, int y_stride)
@@ -15,9 +20,9 @@ void fft_2d(complex* x, int nx, int ny, int x_stride, int y_stride) {
   int i, j;
 
   for(j=0; j<ny; j++)
-    fft_1d(x + j * y_stride, nx, x_stride);
+    fft_1d(x + j * y_stride, nx, x_stride, Wkn_fft);
   for(i=0; i<nx; i++)
-    fft_1d(x + i * x_stride, ny, y_stride);
+    fft_1d(x + i * x_stride, ny, y_stride, Wkn_fft);
 }
 
 // Perform a single 2D IFFT by performing nx+ny 1D IFFTs
@@ -32,9 +37,9 @@ void ifft_2d(complex* x, int nx, int ny, int x_stride, int y_stride) {
   int i, j;
 
   for(j=0; j<ny; j++)
-    ifft_1d(x + j * y_stride, nx, x_stride);
+    ifft_1d(x + j * y_stride, nx, x_stride, Wkn_ifft);
   for(i=0; i<nx; i++)
-    ifft_1d(x + i * x_stride, ny, y_stride);
+    ifft_1d(x + i * x_stride, ny, y_stride, Wkn_ifft);
 }
 
 // Perform a single 3D IFFT by performing NZ 2D IFFTs followed by nx*ny 1D IFFTs
@@ -51,10 +56,14 @@ void ifft_3d(complex* x, int nx, int ny, int nz, int x_stride, int y_stride, int
 
   for(i=0; i<nx; i++)
     for(j=0; j<ny; j++)
-      ifft_1d(x + i * x_stride + j * y_stride, nz, z_stride);
+      ifft_1d(x + i * x_stride + j * y_stride, nz, z_stride, Wkn_ifft);
 }
 
-int main(int argc, char** argv) {  
+int main(int argc, char** argv) {
+  //Precompute FFT coefficients
+  Wkn_fft = precompute_fft_coefficients();
+  Wkn_ifft = precompute_ifft_coefficients();
+  
   // Declare local variables
   int i, j, n;
 
@@ -62,16 +71,22 @@ int main(int argc, char** argv) {
   // 1. allocate buffer space for the data. Holds Nx * Ny * Nf complex numbers.
   // 2. pass the filename and buffer to read_data which will read the file
   //    into the buffer.
+  printf("Reading Data ...\n");
+  tick();
   complex* s = (complex*)safe_malloc(Nx * Ny * Nf * sizeof(complex),
                          "Failed to allocate memory for radar data.");  
   read_data(s, "scene_4.dat");
+  tock();
 
   // Perform a single 2D FFT for each frequency
   // Each element s[i,j,n] is located at s[i * Ny * Nf + j * Nf + n]
   // Thus x-stride = Ny*Nf, y-stride = Nf, and z-stride = 1
   // and each xy plane starts at s + 0 * Ny * Nf + 0 * Nf + n
+  printf("Performing FFT\n");
+  tick();
   for(n=0; n<Nf; n++)
     fft_2d(s + n, Nx, Ny, Ny*Nf, Nf);
+  tock();
 
   // Multiply each element in the frequency-domain signal by the
   // downward continuation phase operator.
@@ -91,6 +106,8 @@ int main(int argc, char** argv) {
   //        phi = exp(j * kz * z0)
   // 5.   multiply the signal with the phase delay
   //        where s(i,j,k) = s[i * Ny * Nf + j * Nf + n]
+  printf("Performing Downward Continuation.\n");
+  tick();
   for(i=0; i<Nx; i++)
     for(j=0; j<Ny; j++)
       for(n=0; n<Nf; n++){
@@ -108,6 +125,7 @@ int main(int argc, char** argv) {
         complex phi = c_jexp(kz * z0);
         s[i * Ny * Nf + j * Nf + n] = c_mult(s[i * Ny * Nf + j * Nf + n], phi);        
       }
+  tock();
 
   // Calculate the range of the Stolt interpolation indices.
   // The minimum angular frequency, w_min = 2*pi * f0
@@ -143,6 +161,8 @@ int main(int argc, char** argv) {
   // 6.   resample this line in s on interpolated indices n_interp
   //         s[i,j,n] is at s[i * Ny * Nf + j * Nf + n] thus this line
   //           starts at s + i * Ny * Nf + j * Nf + 0, has length Nf, and has stride 1
+  printf("Performing Stolt Interpolation.\n");
+  tick();
   for(i=0; i<Nx; i++)
     for(j=0; j<Ny; j++){
       float kx = i < Nx/2 ?
@@ -161,15 +181,23 @@ int main(int argc, char** argv) {
       
       resample_1d(s + i*Ny*Nf + j*Nf, Nf, 1, n_interp);
     }
+  tock();
 
   // Perform a 3D IFFT on the signal
   // Each element s[i,j,n] is located at s[i * Ny * Nf + j * Nf + n]
   // Thus x-stride = Ny*Nf, y-stride = Nf, and z-stride = 1
+  printf("Performing IFFT.\n");
+  tick();
   ifft_3d(s, Nx, Ny, Nf, Ny*Nf, Nf, 1);
+  tock();
 
   // End the simulation by writing out the computed signal and write it out to a file.
   // Pass the computed matrix and a output filename to write_data()
+  printf("Writing data ...\n");
+  tick();
   write_data(s, "scene_4.out");
+  tock();
+  printf("Done.\n");
 
   // Free all the temporary memory
   free(s);

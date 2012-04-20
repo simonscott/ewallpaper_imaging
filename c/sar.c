@@ -2,6 +2,8 @@
 #include <stdlib.h>
 #include <math.h>
 #include <stdio.h>
+#include <time.h>
+#include <sys/time.h>
 
 //================================================================================
 //================ Operations on Complex Numbers =================================
@@ -66,6 +68,26 @@ void c_print(complex x) {
 //==================== Fast Fourier Transform ====================================
 //================================================================================
 
+// Precompute Wkn FFT and IFFT coefficients
+// FFT coefficients: Wkn[k] = exp(-2*pi/N * k)
+complex* precompute_fft_coefficients(){
+  int N = maximum_fft_size;
+  complex* Wkn = (complex*)malloc(N * sizeof(complex));
+  for(int k=0; k<N; k++)
+    Wkn[k] = c_jexp(-2*pi/N * k);
+  return Wkn;
+}
+
+// IFFT coefficients: Wkn[k] = exp(2*pi/N * k)
+// Note that the 1/N scaling factor is not included here.
+complex* precompute_ifft_coefficients(){
+  int N = maximum_fft_size;
+  complex* Wkn = (complex*)malloc(N * sizeof(complex));
+  for(int k=0; k<N; k++)
+    Wkn[k] = c_jexp(2*pi/N * k);
+  return Wkn;
+}
+
 // 1D Fourier Transform: fft_1d_helper(x, N, stride, y)
 // if N > 1 then
 //    1. take the FFT of the even elements in x, and store it in the first half of y
@@ -82,16 +104,15 @@ void c_print(complex x) {
 //       ii. compute the component at Wkn = exp(-j*2*pi/N * (k + N/2))
 //          y[k + N/2] = y[k] + Wkn * y[k + N/2]
 // otherwise just return the element at x[0]
-void fft_1d_helper(complex* x, int N, int stride, complex* y){
-    int k;
-
+void fft_1d_helper(complex* x, int N, int stride, complex* y,
+                   complex* Wkn, int Wkn_stride){
   if(N > 1) {
-    fft_1d_helper(x, N/2, 2*stride, y);
-    fft_1d_helper(x + stride, N/2, 2*stride, y + N/2);
+    fft_1d_helper(x, N/2, 2*stride, y, Wkn, 2*Wkn_stride);
+    fft_1d_helper(x + stride, N/2, 2*stride, y + N/2, Wkn, 2*Wkn_stride);
     
-    for(k=0; k<N/2; k++) {
-      complex Wkn1 = c_jexp(-2*pi/N * k);
-      complex Wkn2 = c_jexp(-2*pi/N * (k + N/2));
+    for(int k=0; k<N/2; k++) {
+      complex Wkn1 = Wkn[k*Wkn_stride];
+      complex Wkn2 = Wkn[(k + N/2)*Wkn_stride];
       complex yk1 = c_add(y[k], c_mult(Wkn1, y[k + N/2]));
       complex yk2 = c_add(y[k], c_mult(Wkn2, y[k + N/2]));
       y[k] = yk1;
@@ -102,20 +123,42 @@ void fft_1d_helper(complex* x, int N, int stride, complex* y){
   }
 }
 
-// fft_1d(complex* x, int N, int stride)
+// fft_1d(complex* x, int N, int stride, complex* Wkn)
 // 1. create a temporary complex buffer of length N
 // 2. use fft_1d and compute the fft of x and store it into the temporary buffer
 // 3. copy the contents of the temporary buffer to x, with the appropriate stride
-void fft_1d(complex* x, int N, int stride){
-  int i;
+void fft_1d(complex* x, int N, int stride, complex* Wkn){
+  // create buffer
   complex buffer[N];
 
-  fft_1d_helper(x, N, stride, buffer);
+  // fft
+  int Wkn_stride = maximum_fft_size / N;
+  fft_1d_helper(x, N, stride, buffer, Wkn, Wkn_stride);
 
-  for(i=0; i<N; i++)
+  // copy back
+  for(int i=0; i<N; i++)
     x[i*stride] = buffer[i];
 }
 
+// ifft_1d(complex* x, int N, int stride, complex* Wkn)
+// 1. create a temporary complex buffer of length N
+// 2. use fft_1d_helper and compute the ifft of x and store it into the temporary buffer
+// 3. copy the contents of the temporary buffer to x, with the appropriate stride and
+//    divide every element by N (because fft_helper does not do that step).
+void ifft_1d(complex* x, int N, int stride, complex* Wkn){
+  // create buffer
+  complex buffer[N];
+
+  // ifft
+  int Wkn_stride = maximum_fft_size / N;  
+  fft_1d_helper(x, N, stride, buffer, Wkn, Wkn_stride);
+
+  // copy back
+  for(int i=0; i<N; i++)
+    x[i*stride] = c_scalar_div(buffer[i], N);
+}
+
+/*
 //================================================================================
 //======================== Inverse Fourier Transform =============================
 //================================================================================
@@ -171,6 +214,8 @@ void ifft_1d(complex* x, int N, int stride){
   for(i=0; i<N; i++)
     x[i*stride] = c_scalar_div(buffer[i], N);
 }
+
+*/
 
 //================================================================================
 //======================= Interpolation ==========================================
@@ -273,3 +318,23 @@ void* safe_malloc(int size, char* error_message) {
   return a;
 }
 
+//================================================================================
+//======================= Timing Functions =======================================
+//================================================================================
+
+// on tick() save the current_time to tick_time
+struct timeval tick_time;
+
+void tick(){
+  gettimeofday(&tick_time, NULL);
+  printf("Tick\n");
+}
+
+void tock(){
+  struct timeval tock_time;
+  gettimeofday(&tock_time, NULL);
+  long seconds = tock_time.tv_sec - tick_time.tv_sec;
+  long milliseconds = tock_time.tv_usec - tick_time.tv_usec;
+  double time = seconds + milliseconds/1e6;
+  printf("Tock: Time Passed = %f\n", time);
+}

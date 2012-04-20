@@ -2,3 +2,4 @@
 2. Precompute the complex exponentials for the FFT.
 3. Precompute the phase shifts for the interpolation.
 4. Change code to use exclusive endpoints (e.g. for kx_max, ky_max, and kz_min, kz_max)
+5. Change all the buffer copies to use memcpy
