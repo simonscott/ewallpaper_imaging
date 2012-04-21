@@ -55,6 +55,21 @@ void free_message(int threadid, char* message){
 }
 
 //================================================================================
+//=================== Send row and Send Column ===================================
+//================================================================================
+
+void send_row(int ant_x, int ant_y, char* message, int size){
+  for(int x = 0; x < Nx; x++)
+    send_message(x, ant_y, message, size);
+}
+
+void send_col(int ant_x, int ant_y, char* message, int size){
+  for(int y = 0; y < Ny; y++)
+    send_message(ant_x, y, message, size);
+}
+
+
+//================================================================================
 //======================= MPI Thread =============================================
 //================================================================================
 
@@ -109,6 +124,15 @@ void* chip_thread(int threadid)
   s[0] = msg[0];
   free_message(threadid, (char*)msg);
   printf("antenna (%d,%d) received (%f,%f)\n", ant_x, ant_y, s[0].real, s[0].imag);
+
+  // Generate some fake data
+  int* id = (int*)data_buffer;
+  id[0] = MYTHREAD;
+  for(int i=0; i<Nf; i++){
+    int* words = (int*)&s[i];
+    words[0] = (ant_x << 16) + ant_y;
+    words[1] = i;
+  }
 
   // Finish thread
   pthread_exit(NULL);
