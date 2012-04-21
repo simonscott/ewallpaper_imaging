@@ -1,5 +1,11 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <mpi.h>
+#include <pthread.h>
+#include <math.h>
+#include <string.h>
+#include "sar.h"
 #include "virtual_network.h"
-#include "network.h"
 
 //================================================================================
 //================== Network Parameters ==========================================
@@ -39,7 +45,7 @@ void send_message(int dest_ant_x, int dest_ant_y, char* message, int size){
 // receive_message(virtual_threadid)
 // just forward command to the virtual network.
 char* receive_message(int threadid){
-  receive_virtual_message(threadid);
+  return receive_virtual_message(threadid);
 }
 
 // free the message
@@ -56,15 +62,17 @@ void free_message(int threadid, char* message){
 // continually receives messages and forwards messages to the appropriate
 // virtual processor.
 void* mpi_thread(void* args){
-  char* message_buffer = malloc(message_memory);
+  char* message_buffer = (char*)malloc(message_memory);
   while(1){
     MPI_Status status;
     MPI_Recv(message_buffer, message_memory, MPI_BYTE,
              MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
+    pthread_testcancel();
     //Compute destination
     int dest_x = status.MPI_TAG >> 16;
     int dest_y = status.MPI_TAG & 0xFFFF;
-    send_message(dest_x, dest_y, message_buffer, status.size);
+    int size; MPI_Get_count(&status, MPI_BYTE, &size);
+    send_message(dest_x, dest_y, message_buffer, size);
   }
 }
 
@@ -93,7 +101,14 @@ void* chip_thread(int threadid)
   // Locate my memory
   complex* s = shared_s + threadid * Nf;
 
-  printf("%d %d\n", ant_x, ant_y);
+  s[0].real = ant_x;
+  s[0].imag = ant_y;
+  send_message((ant_x + 1)%Nx, ant_y, (char*)s, sizeof(complex));
+
+  complex* msg = (complex*)receive_message(threadid);
+  s[0] = msg[0];
+  free_message(threadid, (char*)msg);
+  printf("antenna (%d,%d) received (%f,%f)\n", ant_x, ant_y, s[0].real, s[0].imag);
 
   // Finish thread
   pthread_exit(NULL);
@@ -102,6 +117,17 @@ void* chip_thread(int threadid)
 //================================================================================
 //====================== Main Driver =============================================
 //================================================================================
+
+// Ensure successful MPI broadcast.
+void check_mpi_result(int status){
+  if(status == MPI_SUCCESS)
+    return;
+  else {
+    printf("MPI error code %d\n", status);
+    exit(-1);
+  }
+}
+
 // Initialize MPI
 //   1. Initialize MPI, get rank and size
 //   2. Declare COMPLEX type
@@ -114,7 +140,7 @@ void* chip_thread(int threadid)
 // Create virtual network
 //   1. Determine how many virtual processors to create.
 //   2. Start the network with entry chip_thread.
-int main(int argc, char* argv[]){
+int main(int argc, char* argv[]){  
   // Initialize MPI
   // Initialize, get rank and size
   int N_proc, rank;
@@ -144,20 +170,22 @@ int main(int argc, char* argv[]){
                   "Failed to malloc memory for s");
   complex* file_buf = (complex*)safe_malloc(Nx * Ny * Nf * sizeof(complex),
                   "Failed to malloc memory for file_buf");
+  complex* recv_buf = (complex*)safe_malloc(Nx * Ny * Nf * sizeof(complex),
+                  "Failed to malloc memory for recv_buf");
 
   // Node 0 reads the input file and broadcasts data to all other nodes
   if(rank == 0)
     read_data(file_buf, "scene_4.dat");
-  res = MPI_Bcast(file_buf, Nx * Ny * Nf, COMPLEX, 0, MPI_COMM_WORLD);
+  int res = MPI_Bcast(file_buf, Nx * Ny * Nf, COMPLEX, 0, MPI_COMM_WORLD);
   check_mpi_result(res);
 
   // Extract just the data from the file that the local simulated chips require
   int s_idx = 0;
-  for(i = 0; i < N_thread_x; i++) {
+  for(int i = 0; i < N_thread_x; i++) {
     int thread_x = proc_x * N_thread_x + i;
-    for(j = 0; j < N_thread_y; j++) {
+    for(int j = 0; j < N_thread_y; j++) {
       int thread_y = proc_y * N_thread_y + j;
-      for(f = 0; f < Nf; f++) {
+      for(int f = 0; f < Nf; f++) {
         shared_s[s_idx] = file_buf[thread_x * Ny * Nf + thread_y * Nf + f];
         s_idx++;
       }
@@ -165,8 +193,17 @@ int main(int argc, char* argv[]){
   }
   MPI_Barrier(MPI_COMM_WORLD);
 
+  // Start the MPI Thread
+  pthread_t mpi_receive_thread;
+  pthread_create(&mpi_receive_thread, NULL, &mpi_thread, NULL);
+
   // Create and start virtual network
   start_virtual_network(N_thread_x, N_thread_y, chip_thread);
+
+  // Stop the MPI Thread  
+  pthread_cancel(mpi_receive_thread);
+  MPI_Send(NULL, 0, MPI_BYTE, rank, 0, MPI_COMM_WORLD);
+  pthread_join(mpi_receive_thread, NULL);
 
   // Wait for simulation to finish and gather results
   MPI_Barrier(MPI_COMM_WORLD);
@@ -184,7 +221,7 @@ int main(int argc, char* argv[]){
             int offset = mpi_proc_x * N_proc_y * N_thread_x * N_thread_y * Nf +
                          mpi_proc_y * N_thread_x * N_thread_y * Nf +
                          pthread_x * N_thread_y * Nf + pthread_y * Nf;
-            for(f = 0; f < Nf; f++) {
+            for(int f = 0; f < Nf; f++) {
               file_buf[s_idx] = recv_buf[offset + f];
               s_idx++;
             }

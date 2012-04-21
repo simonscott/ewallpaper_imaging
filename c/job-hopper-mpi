@@ -6,5 +6,5 @@
 #PBS -o sar_mpi.stdout
 #PBS -j oe
 
-cd /global/homes/s/simons/cs267/ewallpaper_imaging/c
+cd $PBS_O_WORKDIR
 aprun -d 1 -n 64 -N 16 ./sar_mpi

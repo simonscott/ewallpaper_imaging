@@ -17,7 +17,7 @@
 //   initialization.
 
 const int max_messages = 100;
-const int message_memory = (Nf + 16)*sizeof(complex);
+//const int message_memory = (Nf + 16)*sizeof(complex);
 int rows_of_processors;
 int cols_of_processors;
 int num_processors;
@@ -63,7 +63,7 @@ void init_processor(int i){
   //Inbox
   processors[i].num_messages = 0;
   processors[i].messages = (char**)malloc(max_messages * sizeof(char*));
-  processors[i].inbox_top = malloc(message_memory);
+  processors[i].inbox_top = (char*)malloc(message_memory);
 }
 
 // start_processor(i, main_function) :

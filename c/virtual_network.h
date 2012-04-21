@@ -1,6 +1,9 @@
 #ifndef VIRTUAL_NETWORK_H
 #define VIRTUAL_NETWORK_H
 
+// Network Parameters
+const int message_memory = (Nf + 16)*sizeof(complex);
+
 // Starting a virtual network
 // e.g. start_virtual_network(10, 10, &my_main)
 // will start a virtual network with 10 by 10 processors on a grid, and initialize

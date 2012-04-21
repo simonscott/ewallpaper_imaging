@@ -6,8 +6,8 @@
 #define pi M_PI
 
 //Antenna Physical Parameters
-#define Nx 2 //128
-#define Ny 2 //128
+#define Nx 128
+#define Ny 128
 #define Dx 0.012
 #define Dy 0.012
 
