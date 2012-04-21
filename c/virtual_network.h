@@ -2,7 +2,8 @@
 #define VIRTUAL_NETWORK_H
 
 // Network Parameters
-const int message_memory = (Nf + 16)*sizeof(complex);
+// const int message_memory = (Nf + 16)*sizeof(complex);
+extern const int message_memory;
 
 // Starting a virtual network
 // e.g. start_virtual_network(10, 10, &my_main)
@@ -36,5 +37,10 @@ char* receive_virtual_message(int threadid);
 // Should always be called like this free_message(MYTHREAD, pointer_to_first_message)
 // Frees the space allocated for the first message in the network buffer.
 void free_virtual_message(int threadid, char* message);
+
+// get_message_size
+// Should always be called like this: get_message_size(MYTHREAD, pointer_to_first_message)
+// Computes the size in bytes of the last message received.
+int get_message_size(int threadid, char* message);
 
 #endif
