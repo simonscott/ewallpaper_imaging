@@ -1,218 +1,190 @@
-#include "sar.h"
-#include <stdlib.h>
-#include <stdio.h>
-#include <math.h>
-#include <mpi.h>
-#include <pthread.h>
+#include "virtual_network.h"
+#include "network.h"
 
 //================================================================================
-//==================== Shared Memory Pointers ====================================
+//================== Network Parameters ==========================================
 //================================================================================
-
-complex* shared_s;                        // The data to process
-complex* shared_pkt_buf;                  // The packet buffer
-int N_proc_x, N_proc_y, proc_x, proc_y;   // MPI processor grid
-int N_thread_x, N_thread_y;               // Num threads per core
-
-//================================================================================
-//==================== Network Functions =========================================
-//================================================================================
-
-// Sends the provided message to all processors in the same row as this processor.
-// This is implemented using MPI Broadcast.
-void send_row(void* message, int size)
-{
-}
-
-// Sends the provided message to all processors in the same column as this processor.
-// This is implemented using MPI Broadcast.
-void send_col(void* message, int size)
-{
-}
-
-// Receives a message from any processor in the same row as this processor.
-// The message is placed in the provided buffer, and the size of the message (in bytes)
-// is returned.
-// This is implemented using an MPI Blocking Read.
-int receive_row(void* buffer)
-{
-  return 0;
-}
-
-// Receives a message from any processor in the same column as this processor.
-// The message is placed in the provided buffer, and the size of the message (in bytes)
-// is returned.
-// This is implemented using an MPI Blocking Read.
-int receive_col(void* buffer)
-{
-  return 0;
-}
+// N_thread_x, and N_thread_y indicate the number of virtual processors per physical
+// processor. N_proc_x, and N_proc_y indicate the number of physical processors.
+// proc_x, and proc_y indicate the x and y coordinate of the current physical
+// processor.
+int proc_x, proc_y, proc;
+int N_proc_x, N_proc_y;
+int N_thread_x, N_thread_y;
 
 //================================================================================
-//==================== Helper Functions ==========================================
+//===================== Network Functions ========================================
 //================================================================================
 
-void check_mpi_result(int status)
-{
-  if(status == MPI_SUCCESS)
-    return;
+// send_message(dest_x, dest_y, message, size)
+// 1. if dest_x and dest_y is on the current chip, then use send_virtual_message
+//    i. compute the virtual threadid
+// 2. otherwise, use MPI send
+//    i. compute the rank of the destination processor
+//    ii. pack the destination address into a single integer tag
+void send_message(int dest_ant_x, int dest_ant_y, char* message, int size){
+  if ((dest_ant_x / N_thread_x == proc_x) && (dest_ant_y / N_thread_y == proc_y)){
+    int threadid = (dest_ant_x - proc_x*N_thread_x) * N_thread_y + (dest_ant_y - proc_y * N_thread_y);
+    send_virtual_message(threadid, message, size);
+  }
   else {
-    printf("MPI error code %d\n", status);
-    exit(-1);
+    int dest_proc_x = dest_ant_x / N_thread_x;
+    int dest_proc_y = dest_ant_y / N_thread_y;
+    int dest_rank = dest_proc_x * N_proc_y + dest_proc_y;
+    int tag = (dest_ant_x << 16) + dest_ant_y;
+    MPI_Send(message, size, MPI_BYTE, dest_rank, tag, MPI_COMM_WORLD);
+  }
+}
+
+// receive_message(virtual_threadid)
+// just forward command to the virtual network.
+char* receive_message(int threadid){
+  receive_virtual_message(threadid);
+}
+
+// free the message
+// just forward command to virtual network.
+void free_message(int threadid, char* message){
+  free_virtual_message(threadid, message);
+}
+
+//================================================================================
+//======================= MPI Thread =============================================
+//================================================================================
+
+// mpi_thread
+// continually receives messages and forwards messages to the appropriate
+// virtual processor.
+void* mpi_thread(void* args){
+  char* message_buffer = malloc(message_memory);
+  while(1){
+    MPI_Status status;
+    MPI_Recv(message_buffer, message_memory, MPI_BYTE,
+             MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
+    //Compute destination
+    int dest_x = status.MPI_TAG >> 16;
+    int dest_y = status.MPI_TAG & 0xFFFF;
+    send_message(dest_x, dest_y, message_buffer, status.size);
   }
 }
 
 //================================================================================
 //==================== Main Processing Thread ====================================
 //================================================================================
-void* chip_thread(void* threadid)
-{
-  long tid = (long)(threadid);
 
+complex* shared_s;
+
+// chip_thread(virtual_threadid)
+// 1. Determine thread_x, and thread_y, the coordinates of the thread within this
+//    virtual network.
+// 2. Determine ant_x, and ant_y, the absolute coordinates on the whole network.
+
+void* chip_thread(int threadid)
+{
   // Calculate thread x and y within this processor
-  int thread_x = tid / N_thread_y;
-  int thread_y = tid - thread_x * N_thread_y;
+  int thread_x = threadid / N_thread_y;
+  int thread_y = threadid - thread_x * N_thread_y;
 
   // Calculate antenna x and y index in entire array
   int ant_x = proc_x * N_thread_x + thread_x;
   int ant_y = proc_y * N_thread_y + thread_y;
 
-  // Compute pointers to own portion of shared memory
-  complex* s = shared_s + tid * Nf;
-  complex* pkt_buf = shared_pkt_buf + tid * (Nf + 16);
+  // Start doing SAR work
+  // Locate my memory
+  complex* s = shared_s + threadid * Nf;
 
-  // Actually run the SAR algorithm
   printf("%d %d\n", ant_x, ant_y);
 
+  // Finish thread
   pthread_exit(NULL);
 }
 
 //================================================================================
-//==================== The Main Function =========================================
+//====================== Main Driver =============================================
 //================================================================================
-
-int main(int argc, char* argv[])
-{
-  // Declare local variables
+// Initialize MPI
+//   1. Initialize MPI, get rank and size
+//   2. Declare COMPLEX type
+// Determine position
+//   1. Determine N_proc_x and N_proc_y
+//   2. Error if we were not given a perfect square number of processors
+//   3. Calculate position:
+//      proc_x = rank / N_proc_y
+//      proc_y = rank - proc_x * N_proc_y
+// Create virtual network
+//   1. Determine how many virtual processors to create.
+//   2. Start the network with entry chip_thread.
+int main(int argc, char* argv[]){
+  // Initialize MPI
+  // Initialize, get rank and size
   int N_proc, rank;
-  int i, j, f, res, s_idx;
-  pthread_t* threads;
-  pthread_attr_t attrib;
-  void* status;
-
-  // Local arrays and buffers
-  complex *recv_buf, *file_buf;              // For file ops on Node 0
-  
-  // MPI setup
   MPI_Init(&argc, &argv);
   MPI_Comm_size(MPI_COMM_WORLD, &N_proc);
   MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-
+  // Declare COMPLEX type
   MPI_Datatype COMPLEX;
   MPI_Type_contiguous(2, MPI_FLOAT, &COMPLEX);
   MPI_Type_commit(&COMPLEX);
-
-  // Determine position in 2D processor array
-  // Assume that the processors are y-major ordered
-  N_proc_x = N_proc_y = int(sqrt(N_proc));
   
+  // Determine Position
+  N_proc_x = N_proc_y = (int)sqrt(N_proc);  
   if(N_proc_x * N_proc_y != N_proc) {
     printf("Error: N_proc is not a perfect square!\n");
     return -1;
   }
-
   proc_x = rank / N_proc_y;
   proc_y = rank - proc_x * N_proc_y;
-
-  // Since there are fewer physical cores than eWallpaper chips, we need
-  // to use Pthreads to simulate the rest
+  
+  // Calculate thread x and y within this processor, and create the virtual network
   N_thread_x = Nx / N_proc_x;
   N_thread_y = Ny / N_proc_y;
 
   // Create local memory for each simulated wallpaper chip
   shared_s = (complex*)safe_malloc(Nf * N_thread_x * N_thread_y * sizeof(complex),
                   "Failed to malloc memory for s");
-  shared_pkt_buf = (complex*)safe_malloc((Nf + 16) * N_thread_x * N_thread_y * sizeof(complex),
-                  "Failed to malloc memory for pkt_buf");
-
-  file_buf = (complex*)safe_malloc(Nx * Ny * Nf * sizeof(complex),
+  complex* file_buf = (complex*)safe_malloc(Nx * Ny * Nf * sizeof(complex),
                   "Failed to malloc memory for file_buf");
-  recv_buf = (complex*)safe_malloc(Nx * Ny * Nf * sizeof(complex),
-                  "Failed to malloc memory for recv_buf");
 
   // Node 0 reads the input file and broadcasts data to all other nodes
   if(rank == 0)
     read_data(file_buf, "scene_4.dat");
-
   res = MPI_Bcast(file_buf, Nx * Ny * Nf, COMPLEX, 0, MPI_COMM_WORLD);
   check_mpi_result(res);
 
   // Extract just the data from the file that the local simulated chips require
-  s_idx = 0;
-
-  for(i = 0; i < N_thread_x; i++)
-  {
+  int s_idx = 0;
+  for(i = 0; i < N_thread_x; i++) {
     int thread_x = proc_x * N_thread_x + i;
-
-    for(j = 0; j < N_thread_y; j++)
-    {
+    for(j = 0; j < N_thread_y; j++) {
       int thread_y = proc_y * N_thread_y + j;
-
-      for(f = 0; f < Nf; f++)
-      {
+      for(f = 0; f < Nf; f++) {
         shared_s[s_idx] = file_buf[thread_x * Ny * Nf + thread_y * Nf + f];
         s_idx++;
       }
     }
   }
-
   MPI_Barrier(MPI_COMM_WORLD);
 
-  // Launch the threads
-  threads = (pthread_t*)safe_malloc(N_thread_x * N_thread_y * sizeof(pthread_t),
-                        "Failed to malloc space for threads");
-  pthread_attr_init(&attrib);
-  pthread_attr_setdetachstate(&attrib, PTHREAD_CREATE_JOINABLE);
+  // Create and start virtual network
+  start_virtual_network(N_thread_x, N_thread_y, chip_thread);
 
-  for(i = 0; i < N_thread_x; i++) {
-    for(j = 0; j < N_thread_y; j++) {
-      res = pthread_create(&threads[i*N_thread_y + j], &attrib, chip_thread, (void*)(i*N_thread_y + j));
-
-      if(res) {
-        printf("Failed to create threads\n");
-        exit(-1);
-      }
-    }
-  }
-
-  // Wait until all threads have completed
-  for(i = 0; i < N_thread_x; i++) {
-    for(j = 0; j < N_thread_y; j++) {
-      res = pthread_join(threads[i*N_thread_y + j], &status);
-    }
-  }
-
+  // Wait for simulation to finish and gather results
   MPI_Barrier(MPI_COMM_WORLD);
-
   // Node 0 gathers the results from all other nodes
-  MPI_Gather(shared_s, N_thread_x * N_thread_y * Nf, COMPLEX, recv_buf, N_thread_x * N_thread_y * Nf, COMPLEX, 0, MPI_COMM_WORLD);
-
+  MPI_Gather(shared_s, N_thread_x * N_thread_y * Nf, COMPLEX, recv_buf,
+             N_thread_x * N_thread_y * Nf, COMPLEX, 0, MPI_COMM_WORLD);  
   // Node 0 writes the results to file
-  if(rank == 0)
-  {
+  if(rank == 0) {
     // First rearrange the data
     s_idx = 0;
     for(int mpi_proc_x = 0; mpi_proc_x < N_proc_x; mpi_proc_x++) {
       for(int pthread_x = 0; pthread_x < N_thread_x; pthread_x++) {
         for(int mpi_proc_y = 0; mpi_proc_y < N_proc_y; mpi_proc_y++) {
           for(int pthread_y = 0; pthread_y < N_thread_y; pthread_y++) {
-
             int offset = mpi_proc_x * N_proc_y * N_thread_x * N_thread_y * Nf +
                          mpi_proc_y * N_thread_x * N_thread_y * Nf +
                          pthread_x * N_thread_y * Nf + pthread_y * Nf;
-
-            for(f = 0; f < Nf; f++)
-            {
+            for(f = 0; f < Nf; f++) {
               file_buf[s_idx] = recv_buf[offset + f];
               s_idx++;
             }
@@ -226,13 +198,9 @@ int main(int argc, char* argv[])
   }
 
   // Free allocated memory
-  pthread_attr_destroy(&attrib);
   free(shared_s);
-  free(shared_pkt_buf);
-  free(file_buf);
-  free(recv_buf);
-  free(threads);
 
+  // Cleanup MPI
   MPI_Finalize();
   pthread_exit(NULL);
 }

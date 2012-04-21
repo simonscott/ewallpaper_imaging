@@ -2,6 +2,7 @@
 #include <pthread.h>
 #include <stdio.h>
 #include <string.h>
+#include "sar.h"
 #include "virtual_network.h"
 
 //================================================================================
@@ -16,7 +17,7 @@
 //   initialization.
 
 const int max_messages = 100;
-const int message_memory = 1024;
+const int message_memory = (Nf + 16)*sizeof(complex);
 int rows_of_processors;
 int cols_of_processors;
 int num_processors;
@@ -76,7 +77,7 @@ void start_processor(int i, processor_main_function main_function){
 
 // wait_for_messages(p) :
 // Blocks until there is a message in the message inbox.
-// Called internally by receive_message()
+// Called internally by receive_virtual_message()
 // 1. Acquire the execution_lock
 // 2. While there are no number of messages,
 // 3. Wait on the condition variable. (Expects the condition variable to be
@@ -91,7 +92,7 @@ void wait_for_messages(processor* p){
 
 // add_message(i, message, size) :
 // Adds the specified size to the message inbox of processor i.
-// Will be called internally by send_message.
+// Will be called internally by send_virtual_message.
 // 1. Retrieve the appropriate processor, p
 // 2. Print an error if the message inbox is full.
 // 3. Print an error if the message inbox is out of memory
@@ -103,13 +104,12 @@ void wait_for_messages(processor* p){
 void add_message(int i, char* message, int size){
   //Retrieve processor
   processor* p = &processors[i];
-
-  //Error Condition
+  //Maximum number of messages reached
   if(p->num_messages >= max_messages){
     printf("Maximum number of messages exceeded on processor %d\n", i);
     exit(-1);
   }
-
+  //Buffer overflow
   if(p->num_messages > 0){
     char* end_of_memory = p->messages[0] + message_memory;
     if(p->inbox_top + size >= end_of_memory){
@@ -117,7 +117,6 @@ void add_message(int i, char* message, int size){
       exit(-1);
     }
   }
-
   //Copy message to buffer
   memcpy(p->inbox_top, message, size);
   p->messages[p->num_messages] = p->inbox_top;
@@ -125,7 +124,7 @@ void add_message(int i, char* message, int size){
   p->inbox_top += size;
 }
 
-// send_message(i, message, size)
+// send_virtual_message(i, message, size)
 // Sends a message to the processor i. Copies the given message to the message buffer
 // of the destination processor.
 // 1. Retrieve the processor, p
@@ -133,7 +132,7 @@ void add_message(int i, char* message, int size){
 // 3. Add the message the inbox
 // 4. Notify the processor's the condition variable
 // 3. Release the execution lock
-void send_message(int i, char* message, int size){
+void send_virtual_message(int i, char* message, int size){
   processor* p = &processors[i];
   pthread_mutex_lock(&(p->execution_lock));
   add_message(i, message, size);
@@ -141,16 +140,16 @@ void send_message(int i, char* message, int size){
   pthread_mutex_unlock(&(p->execution_lock));
 }
 
-// receive_message(MYTHREAD) :
+// receive_virtual_message(MYTHREAD) :
 // Returns a pointer to the first message in the message inbox
 // If the message inbox is empty, then wait for a message to arrive.
-char* receive_message(int threadid){
+char* receive_virtual_message(int threadid){
   if(processors[threadid].num_messages == 0)
     wait_for_messages(&processors[threadid]);
   return processors[threadid].messages[0];
 }
 
-// free_message(MYTHREAD, message) :
+// free_virtual_message(MYTHREAD, message) :
 // Frees the first message in the inbox (which is pointed to by message).
 // 1. Retrieve the processor
 // 2. Print an error if the inbox is empty and there is no message to free.
@@ -164,22 +163,19 @@ char* receive_message(int threadid){
 // 9.    Compute the size of the first message, message_1_size
 // 10.   Decrease the inbox_top by message_1_size
 // 10.   For each message[i], update its pointer to be (what it used to be) - message_1_size
-void free_message(int i, char* message){
+void free_virtual_message(int i, char* message){
   // Retrieve Processor
   processor* p = &processors[i];
-
   // Inbox Empty
   if(p->num_messages == 0){
     printf("Processor %d has an empty inbox.\n", i);
     exit(-1);
   }
-
   // Given messages doesn't match message[0]
   if(p->messages[0] != message){
     printf("You must free messages in order.\n");
     exit(-1);
   }
-
   // One message in inbox
   if(p->num_messages == 1){
     p->inbox_top = p->messages[0];
@@ -223,22 +219,17 @@ void start_virtual_network(int rows, int cols, processor_main_function p_main){
   rows_of_processors = rows;
   cols_of_processors = cols;
   num_processors = rows_of_processors * cols_of_processors;
-
   //Allocate Processors
   processors = (processor*)malloc(num_processors * sizeof(processor));
-
   //Initialize Processors
   for(int i=0; i<num_processors; i++)
     init_processor(i);
-
   //Start Processors
   for(int i=0; i<num_processors; i++)
     start_processor(i, p_main);
-
   //Wait for Processors to finish processing
   for(int i=0; i<num_processors; i++)
     pthread_join(processors[i].thread, NULL);
-
   //Free Processor Memory and Processor Array
   for(int i=0; i<num_processors; i++)
     free_processor(&processors[i]);
