@@ -11,15 +11,15 @@
 
 // max_messages holds the maximum number of messages that a single node can hold.
 // message_memory holds the amount of memory in the network buffer per node.
-// rows_of_processors and cols_of_processors indicate the number of rows and
+// num_x_processors and num_y_processors indicate the number of rows and
 //   columns of processors in the network.
-// num_processors = rows_of_processors * cols_of_processors is calculated upon
+// num_processors = num_x_processors * num_y_processors is calculated upon
 //   initialization.
 
-const int max_messages = 100;
-//const int message_memory = (Nf + 16)*sizeof(complex);
-int rows_of_processors;
-int cols_of_processors;
+#define max_messages 256
+const int message_memory = max_messages * (Nf + 16)*sizeof(complex);
+int num_x_processors;
+int num_y_processors;
 int num_processors;
 
 //================================================================================
@@ -62,17 +62,23 @@ void init_processor(int i){
 
   //Inbox
   processors[i].num_messages = 0;
-  processors[i].messages = (char**)malloc(max_messages * sizeof(char*));
-  processors[i].inbox_top = (char*)malloc(message_memory);
+  processors[i].messages = (char**)safe_malloc(max_messages * sizeof(char*), "Could not allocate inbox.");
+  processors[i].inbox_top = (char*)safe_malloc(message_memory, "Could not allocate inbox memory.");
 }
 
 // start_processor(i, main_function) :
 // 1. Creates the thread for processor i, and starts it.
 // Note that this function should not be called until all the other processors
 // that this processor might talk to are already initialized.
+// 2. If the thread creation failed, then immediate exit.
 void start_processor(int i, processor_main_function main_function){
   void* (*thread_entry)(void*) = (void* (*)(void*))main_function;
-  pthread_create(&processors[i].thread, NULL, thread_entry, (void*)(long)i);
+  int failure = pthread_create(&processors[i].thread, NULL, thread_entry, (void*)(long)i);
+  if(failure){
+    printf("Failed to create processor %d.\n", i);
+    printf("OS Thread Overload.\n");
+    exit(-1);
+  }
 }
 
 // wait_for_messages(p) :
@@ -118,7 +124,7 @@ void add_message(int i, char* message, int size){
     }
   }
   //Copy message to buffer
-  memcpy(p->inbox_top, message, size);
+  memmove(p->inbox_top, message, size);
   p->messages[p->num_messages] = p->inbox_top;
   p->num_messages++;
   p->inbox_top += size;
@@ -127,12 +133,17 @@ void add_message(int i, char* message, int size){
 // send_virtual_message(i, message, size)
 // Sends a message to the processor i. Copies the given message to the message buffer
 // of the destination processor.
+// a. error if i is not a valid processor
 // 1. Retrieve the processor, p
 // 2. Acquire the execution lock
 // 3. Add the message the inbox
 // 4. Notify the processor's the condition variable
 // 3. Release the execution lock
 void send_virtual_message(int i, char* message, int size){
+  if(i < 0 || i >= num_processors){
+    printf("Processor %d is not a valid processor.\n", i);
+    exit(-1);
+  }
   processor* p = &processors[i];
   pthread_mutex_lock(&(p->execution_lock));
   add_message(i, message, size);
@@ -144,9 +155,37 @@ void send_virtual_message(int i, char* message, int size){
 // Returns a pointer to the first message in the message inbox
 // If the message inbox is empty, then wait for a message to arrive.
 char* receive_virtual_message(int threadid){
+  if(threadid < 0 || threadid >= num_processors){
+    printf("Processor %d is not a valid processor.\n", threadid);
+    exit(-1);
+  }
   if(processors[threadid].num_messages == 0)
     wait_for_messages(&processors[threadid]);
   return processors[threadid].messages[0];
+}
+
+// get_message_size(MYTHREAD, message) :
+// Computes the size of the last received message.
+// 1. Error if the inbox is empty.
+// 2. Error if the given message does not match the first message.
+// 3. Compute the size
+int get_message_size(int threadid, char* message){
+  processor* p = &processors[threadid];
+  // Inbox Empty
+  if(p->num_messages == 0){
+    printf("Processor %d has an empty inbox.\n", threadid);
+    exit(-1);
+  }  
+  // Given messages doesn't match message[0]
+  if(p->messages[0] != message){
+    printf("You can only request the size of the first message.\n");
+    exit(-1);
+  }
+  // Compute size
+  if(p->num_messages == 1)
+    return p->inbox_top - p->messages[0];
+  else
+    return p->messages[1] - p->messages[0];
 }
 
 // free_virtual_message(MYTHREAD, message) :
@@ -166,6 +205,8 @@ char* receive_virtual_message(int threadid){
 void free_virtual_message(int i, char* message){
   // Retrieve Processor
   processor* p = &processors[i];
+  pthread_mutex_lock(&(p->execution_lock));
+  
   // Inbox Empty
   if(p->num_messages == 0){
     printf("Processor %d has an empty inbox.\n", i);
@@ -183,12 +224,15 @@ void free_virtual_message(int i, char* message){
   }
   // Multiple messages in inbox
   else {
-    memcpy(p->messages[0], p->messages[1], p->inbox_top - p->messages[1]);    
+    memmove(p->messages[0], p->messages[1], p->inbox_top - p->messages[1]);    
     int message_1_size = p->messages[1] - p->messages[0];
     for(int i=0; i < p->num_messages-1; i++)
       p->messages[i] = p->messages[i+1] - message_1_size;
     p->inbox_top -= message_1_size;
+    p->num_messages--;
   }
+
+  pthread_mutex_unlock(&(p->execution_lock));
 }
 
 // free_processor(p) :
@@ -205,7 +249,7 @@ void free_processor(processor* p){
 //================================================================================
 //===================== Network Functions ========================================
 //================================================================================
-// start_virtual_network(rows, cols, processor_main)
+// start_virtual_network(num_x, num_y, processor_main)
 // Starts the virtual network with the given configuration, runs the simulation,
 // and performs cleanup and returns.
 // 1. Set the global parameters of the network
@@ -214,11 +258,11 @@ void free_processor(processor* p){
 // 4. Start all the processors
 // 5. Wait for all the processor threads to finish
 // 6. Free all the processors, and the global processors array
-void start_virtual_network(int rows, int cols, processor_main_function p_main){
+void start_virtual_network(int num_x, int num_y, processor_main_function p_main){
   //Set Parameters
-  rows_of_processors = rows;
-  cols_of_processors = cols;
-  num_processors = rows_of_processors * cols_of_processors;
+  num_x_processors = num_x;
+  num_y_processors = num_y;
+  num_processors = num_x_processors * num_y_processors;
   //Allocate Processors
   processors = (processor*)malloc(num_processors * sizeof(processor));
   //Initialize Processors

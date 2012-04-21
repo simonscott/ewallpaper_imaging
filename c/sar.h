@@ -6,8 +6,8 @@
 #define pi M_PI
 
 //Antenna Physical Parameters
-#define Nx 128
-#define Ny 128
+#define Nx 20 //128
+#define Ny 20 //128
 #define Dx 0.012
 #define Dy 0.012
 
@@ -27,10 +27,10 @@ typedef struct {
 } complex;
 
 //Network Functions
-void send_row(void* message, int size);
-void send_col(void* message, int size);
-int receive_row(void* buffer);
-int receive_col(void* buffer);
+//void send_row(void* message, int size);
+//void send_col(void* message, int size);
+//int receive_row(void* buffer);
+//int receive_col(void* buffer);
 
 //Complex Number Functions
 complex c_mult(complex x, complex y);
