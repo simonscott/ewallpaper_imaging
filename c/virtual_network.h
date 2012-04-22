@@ -36,11 +36,11 @@ char* receive_virtual_message(int threadid);
 // free_message :
 // Should always be called like this free_message(MYTHREAD, pointer_to_first_message)
 // Frees the space allocated for the first message in the network buffer.
-void free_virtual_message(int threadid, char* message);
+void free_virtual_message(int threadid);
 
 // get_message_size
 // Should always be called like this: get_message_size(MYTHREAD, pointer_to_first_message)
 // Computes the size in bytes of the last message received.
-int get_message_size(int threadid, char* message);
+int get_message_size(int threadid);
 
 #endif

@@ -17,7 +17,7 @@
 //   initialization.
 
 #define max_messages 256
-const int message_memory = max_messages * (Nf + 16)*sizeof(complex);
+const int message_memory = max_messages * MAX_MSG_SZ;
 int num_x_processors;
 int num_y_processors;
 int num_processors;
@@ -169,18 +169,13 @@ char* receive_virtual_message(int threadid){
 // 1. Error if the inbox is empty.
 // 2. Error if the given message does not match the first message.
 // 3. Compute the size
-int get_message_size(int threadid, char* message){
+int get_message_size(int threadid){
   processor* p = &processors[threadid];
   // Inbox Empty
   if(p->num_messages == 0){
     printf("Processor %d has an empty inbox.\n", threadid);
     exit(-1);
   }  
-  // Given messages doesn't match message[0]
-  if(p->messages[0] != message){
-    printf("You can only request the size of the first message.\n");
-    exit(-1);
-  }
   // Compute size
   if(p->num_messages == 1)
     return p->inbox_top - p->messages[0];
@@ -202,7 +197,7 @@ int get_message_size(int threadid, char* message){
 // 9.    Compute the size of the first message, message_1_size
 // 10.   Decrease the inbox_top by message_1_size
 // 10.   For each message[i], update its pointer to be (what it used to be) - message_1_size
-void free_virtual_message(int i, char* message){
+void free_virtual_message(int i){
   // Retrieve Processor
   processor* p = &processors[i];
   pthread_mutex_lock(&(p->execution_lock));
@@ -210,11 +205,6 @@ void free_virtual_message(int i, char* message){
   // Inbox Empty
   if(p->num_messages == 0){
     printf("Processor %d has an empty inbox.\n", i);
-    exit(-1);
-  }
-  // Given messages doesn't match message[0]
-  if(p->messages[0] != message){
-    printf("You must free messages in order.\n");
     exit(-1);
   }
   // One message in inbox

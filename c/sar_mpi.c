@@ -28,44 +28,70 @@ int N_thread_x, N_thread_y;
 // 2. otherwise, use MPI send
 //    i. compute the rank of the destination processor
 //    ii. pack the destination address into a single integer tag
-void send_message(int dest_ant_x, int dest_ant_y, char* message, int size){
+void send_message(int src_ant_x, int src_ant_y, int dest_ant_x, int dest_ant_y,
+                  char* message, int size, char* send_buf){
+  // Create message packet
+  int* tag = (int*)(send_buf);
+  tag[0] = src_ant_x;
+  tag[1] = src_ant_y;
+  memcpy(send_buf + 2*sizeof(int), message, size);
+
   if ((dest_ant_x / N_thread_x == proc_x) && (dest_ant_y / N_thread_y == proc_y)){
     int threadid = (dest_ant_x - proc_x*N_thread_x) * N_thread_y + (dest_ant_y - proc_y * N_thread_y);
-    send_virtual_message(threadid, message, size);
+    send_virtual_message(threadid, send_buf, size + 2*sizeof(int));
   }
   else {
     int dest_proc_x = dest_ant_x / N_thread_x;
     int dest_proc_y = dest_ant_y / N_thread_y;
     int dest_rank = dest_proc_x * N_proc_y + dest_proc_y;
-    int tag = (dest_ant_x << 16) + dest_ant_y;
-    MPI_Send(message, size, MPI_BYTE, dest_rank, tag, MPI_COMM_WORLD);
+    int dest_tag = (dest_ant_x << 16) + dest_ant_y;
+    MPI_Send(send_buf, size + 2*sizeof(int), MPI_BYTE, dest_rank, dest_tag, MPI_COMM_WORLD);
   }
 }
 
 // receive_message(virtual_threadid)
 // just forward command to the virtual network.
-char* receive_message(int threadid){
-  return receive_virtual_message(threadid);
+char* receive_message(int threadid, int* src_x, int* src_y, int* size){
+  char* msg = receive_virtual_message(threadid);
+  int* tag = (int*)(msg);
+  *src_x = tag[0];
+  *src_y = tag[1];
+  *size = get_message_size(threadid) - 2*sizeof(int);
+  return msg + 2*sizeof(int);
 }
 
 // free the message
 // just forward command to virtual network.
-void free_message(int threadid, char* message){
-  free_virtual_message(threadid, message);
+void free_message(int threadid){
+  free_virtual_message(threadid);
 }
 
 //================================================================================
 //=================== Send row and Send Column ===================================
 //================================================================================
 
-void send_row(int ant_x, int ant_y, char* message, int size){
-  for(int x = 0; x < Nx; x++)
-    send_message(x, ant_y, message, size);
+void send_row(int ant_x, int ant_y, char* message, int size, char* send_buf){
+  if(ant_x > 0)
+    send_message(ant_x, ant_y, ant_x-1, ant_y, message, size, send_buf);
+  if(ant_x < Nx-1)
+    send_message(ant_x, ant_y, ant_x+1, ant_y, message, size, send_buf);
+}
+
+char* receive_row(int ant_x, int ant_y, int* src_x, int* src_y, int* size, int threadid, char* send_buf)
+{
+  char* msg = receive_message(threadid, src_x, src_y, size);
+
+  if(*src_x < ant_x && ant_x < Nx-1)
+    send_message(*src_x, *src_y, ant_x+1, ant_y, msg, *size, send_buf);
+  else if(*src_x > ant_x && ant_x > 0)
+    send_message(*src_x, *src_y, ant_x-1, ant_y, msg, *size, send_buf);
+
+  return msg; 
 }
 
 void send_col(int ant_x, int ant_y, char* message, int size){
-  for(int y = 0; y < Ny; y++)
-    send_message(ant_x, y, message, size);
+  //for(int y = 0; y < Ny; y++)
+    //send_message(ant_x, y, message, size);
 }
 
 
@@ -87,7 +113,10 @@ void* mpi_thread(void* args){
     int dest_x = status.MPI_TAG >> 16;
     int dest_y = status.MPI_TAG & 0xFFFF;
     int size; MPI_Get_count(&status, MPI_BYTE, &size);
-    send_message(dest_x, dest_y, message_buffer, size);
+    int thread_x = (dest_x - proc_x*N_thread_x);
+    int thread_y = (dest_y - proc_y*N_thread_y);
+    int threadid = thread_x * N_thread_y + thread_y;
+    send_virtual_message(threadid, message_buffer, size);
   }
 }
 
@@ -112,29 +141,42 @@ void* chip_thread(int threadid)
   int ant_x = proc_x * N_thread_x + thread_x;
   int ant_y = proc_y * N_thread_y + thread_y;
 
+  // Allocate space for send buffer
+  char* send_buf = (char*)safe_malloc(MAX_MSG_SZ, "Failed to malloc memory for send buffer");
+
   // Start doing SAR work
   // Locate my memory
   complex* s = shared_s + threadid * Nf;
 
-  s[0].real = ant_x;
-  s[0].imag = ant_y;
-  send_message((ant_x + 1)%Nx, ant_y, (char*)s, sizeof(complex));
-
-  complex* msg = (complex*)receive_message(threadid);
-  s[0] = msg[0];
-  free_message(threadid, (char*)msg);
-  printf("antenna (%d,%d) received (%f,%f)\n", ant_x, ant_y, s[0].real, s[0].imag);
-
   // Generate some fake data
-  int* id = (int*)data_buffer;
-  id[0] = MYTHREAD;
   for(int i=0; i<Nf; i++){
-    int* words = (int*)&s[i];
+    int* words = (int*)(s + i*sizeof(complex));
     words[0] = (ant_x << 16) + ant_y;
     words[1] = i;
   }
 
+  // Send my local data to all processors in row
+  send_row(ant_x, ant_y, (char*)s, sizeof(complex), send_buf);
+
+  // Receive
+  for(int i=0; i<Nx-1; i++) {
+    int src_x, src_y, size;
+    complex* msg = (complex*)receive_row(ant_x, ant_y, &src_x, &src_y, &size, threadid, send_buf);
+
+    if(ant_x == 67 && ant_y == 42)
+    {
+      printf("Received from (%d, %d), size=%d\n", src_x, src_y, size);
+
+      for(int j=0; j < 1; j++) {
+        int* a = (int*)(&msg[j].real);
+        printf("%d, %d, %d\n", ((*a) >> 16), ((*a) & 0xFFFF), a[1]);
+      }
+    }
+    free_message(threadid);
+  }
+      
   // Finish thread
+  free(send_buf);
   pthread_exit(NULL);
 }
 
@@ -165,6 +207,7 @@ void check_mpi_result(int status){
 //   1. Determine how many virtual processors to create.
 //   2. Start the network with entry chip_thread.
 int main(int argc, char* argv[]){  
+
   // Initialize MPI
   // Initialize, get rank and size
   int N_proc, rank;
