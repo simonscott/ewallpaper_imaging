@@ -36,8 +36,8 @@ int N_thread_x, N_thread_y;
 void send_message(int src_ant_x, int src_ant_y, int dest_ant_x, int dest_ant_y,
                   char* message, int size, char* send_buf){
   // Encode src_x and src_y
-  int header_size = 2*sizeof(int);
-  int* tag = (int*)(send_buf);
+  int header_size = 2*sizeof(unsigned char);
+  unsigned char* tag = (unsigned char*)(send_buf);
   tag[0] = src_ant_x;
   tag[1] = src_ant_y;
 
@@ -66,10 +66,10 @@ void send_message(int src_ant_x, int src_ant_y, int dest_ant_x, int dest_ant_y,
 // 3. Returns the size of the *decoded* message, and a pointer to the *decoded* message
 char* receive_message(int threadid, int* src_x, int* src_y, int* size){
   char* msg = receive_virtual_message(threadid);
-  int header_size = 2*sizeof(int);
-  int* tag = (int*)(msg);
-  *src_x = tag[0];
-  *src_y = tag[1];
+  int header_size = 2*sizeof(unsigned char);
+  unsigned char* tag = (unsigned char*)(msg);
+  *src_x = (int)tag[0];
+  *src_y = (int)tag[1];
   *size = get_message_size(threadid) - header_size;
   return msg + header_size;
 }
@@ -372,6 +372,9 @@ int main(int argc, char* argv[]){
   MPI_Type_contiguous(2, MPI_FLOAT, &COMPLEX);
   MPI_Type_commit(&COMPLEX);
   
+  if(rank == 0)
+    printf("Starting MPI-based SAR Simulation\n");
+
   // Determine Position
   N_proc_x = N_proc_y = (int)sqrt(N_proc);  
   if(N_proc_x * N_proc_y != N_proc) {
