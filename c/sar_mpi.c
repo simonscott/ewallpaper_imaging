@@ -36,8 +36,8 @@ int N_thread_x, N_thread_y;
 void send_message(int src_ant_x, int src_ant_y, int dest_ant_x, int dest_ant_y,
                   char* message, int size, char* send_buf){
   // Encode src_x and src_y
-  int header_size = 2*sizeof(unsigned char);
-  unsigned char* tag = (unsigned char*)(send_buf);
+  int header_size = 2*sizeof(int);
+  int* tag = (int*)(send_buf);
   tag[0] = src_ant_x;
   tag[1] = src_ant_y;
 
@@ -54,7 +54,7 @@ void send_message(int src_ant_x, int src_ant_y, int dest_ant_x, int dest_ant_y,
   }
   else {
     int dest_rank = dest_proc_x * N_proc_y + dest_proc_y;
-    int dest_tag = (dest_ant_x << 16) + dest_ant_y;
+    int dest_tag = (dest_ant_x << 8) + dest_ant_y;
     MPI_Send(send_buf, size + header_size, MPI_BYTE, dest_rank, dest_tag, MPI_COMM_WORLD);
   }
 }
@@ -66,8 +66,8 @@ void send_message(int src_ant_x, int src_ant_y, int dest_ant_x, int dest_ant_y,
 // 3. Returns the size of the *decoded* message, and a pointer to the *decoded* message
 char* receive_message(int threadid, int* src_x, int* src_y, int* size){
   char* msg = receive_virtual_message(threadid);
-  int header_size = 2*sizeof(unsigned char);
-  unsigned char* tag = (unsigned char*)(msg);
+  int header_size = 2*sizeof(int);
+  int* tag = (int*)(msg);
   *src_x = (int)tag[0];
   *src_y = (int)tag[1];
   *size = get_message_size(threadid) - header_size;
@@ -158,8 +158,8 @@ void* mpi_thread(void* args){
              MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
     pthread_testcancel();
     //Compute destination
-    int dest_x = status.MPI_TAG >> 16;
-    int dest_y = status.MPI_TAG & 0xFFFF;
+    int dest_x = status.MPI_TAG >> 8;
+    int dest_y = status.MPI_TAG & 0xFF;
     int size; MPI_Get_count(&status, MPI_BYTE, &size);
     int thread_x = (dest_x - proc_x*N_thread_x);
     int thread_y = (dest_y - proc_y*N_thread_y);
@@ -428,7 +428,8 @@ int main(int argc, char* argv[]){
 
   // Stop the MPI Thread  
   pthread_cancel(mpi_receive_thread);
-  MPI_Send(NULL, 0, MPI_BYTE, rank, 0, MPI_COMM_WORLD);
+  char dummy;
+  MPI_Send(&dummy, 1, MPI_BYTE, rank, 0, MPI_COMM_WORLD);
   pthread_join(mpi_receive_thread, NULL);
 
   // Wait for simulation to finish and gather results
