@@ -11,7 +11,8 @@ extern const int message_memory;
 // each processor to run my_main.
 // my_main must take a single integer argument MYTHREAD, and return a void pointer.
 typedef void* (*processor_main_function)(int MYTHREAD);
-void start_virtual_network(int rows, int cols, processor_main_function p_main);
+void init_virtual_network(int num_x, int num_y);
+void start_virtual_network(processor_main_function p_main);
 
 // Message Passing Functions
 // sends are nonblocking, receives are blocking.

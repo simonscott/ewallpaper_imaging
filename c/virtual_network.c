@@ -140,8 +140,9 @@ void add_message(int i, char* message, int size){
 // 4. Notify the processor's the condition variable
 // 3. Release the execution lock
 void send_virtual_message(int i, char* message, int size){
-  if(i < 0 || i >= num_processors){
+  if((i < 0) || (i >= num_processors)){
     printf("Processor %d is not a valid processor.\n", i);
+    printf("num_processors = %d\n", num_processors);
     exit(-1);
   }
   processor* p = &processors[i];
@@ -155,8 +156,9 @@ void send_virtual_message(int i, char* message, int size){
 // Returns a pointer to the first message in the message inbox
 // If the message inbox is empty, then wait for a message to arrive.
 char* receive_virtual_message(int threadid){
-  if(threadid < 0 || threadid >= num_processors){
+  if((threadid < 0) || (threadid >= num_processors)){
     printf("Processor %d is not a valid processor.\n", threadid);
+    printf("num_processors = %d\n", num_processors);
     exit(-1);
   }
   if(processors[threadid].num_messages == 0)
@@ -248,7 +250,7 @@ void free_processor(processor* p){
 // 4. Start all the processors
 // 5. Wait for all the processor threads to finish
 // 6. Free all the processors, and the global processors array
-void start_virtual_network(int num_x, int num_y, processor_main_function p_main){
+void init_virtual_network(int num_x, int num_y){
   //Set Parameters
   num_x_processors = num_x;
   num_y_processors = num_y;
@@ -258,14 +260,17 @@ void start_virtual_network(int num_x, int num_y, processor_main_function p_main)
   //Initialize Processors
   for(int i=0; i<num_processors; i++)
     init_processor(i);
+}
+
+void start_virtual_network(processor_main_function p_main){
   //Start Processors
   for(int i=0; i<num_processors; i++)
-    start_processor(i, p_main);
+    start_processor(i, p_main);  
   //Wait for Processors to finish processing
   for(int i=0; i<num_processors; i++)
     pthread_join(processors[i].thread, NULL);
   //Free Processor Memory and Processor Array
   for(int i=0; i<num_processors; i++)
     free_processor(&processors[i]);
-  free(processors);
+  free(processors);  
 }
