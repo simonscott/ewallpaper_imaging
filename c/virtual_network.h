@@ -13,6 +13,7 @@ extern const int message_memory;
 typedef void* (*processor_main_function)(int MYTHREAD);
 void init_virtual_network(int num_x, int num_y);
 void start_virtual_network(processor_main_function p_main);
+void free_virtual_network();
 
 // Message Passing Functions
 // sends are nonblocking, receives are blocking.

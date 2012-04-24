@@ -102,11 +102,9 @@ char* receive_and_forward(int ant_x, int ant_y, int* src_x, int* src_y, int* siz
   } else if(*src_y < ant_y){
     if(ant_y < Ny - 1)
       send_message(*src_x, *src_y, ant_x, ant_y+1, msg, *size, send_buf);
-    printf("BAD 1\n");
   } else if(*src_y > ant_y){
     if(ant_y > 0)
       send_message(*src_x, *src_y, ant_x, ant_y-1, msg, *size, send_buf);
-    printf("BAD 2\n");
   } else {
     printf("ERROR: Unreachable Statement.\n");
   }
@@ -156,16 +154,24 @@ void* mpi_thread(void* args){
     MPI_Status status;
     MPI_Recv(message_buffer, message_memory, MPI_BYTE,
              MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
-    pthread_testcancel();
+    int size; MPI_Get_count(&status, MPI_BYTE, &size);
+
+    //Test whether we received the 0-byte stop message
+    if(size == 0)
+      break;
+    
     //Compute destination
     int dest_x = status.MPI_TAG >> 8;
     int dest_y = status.MPI_TAG & 0xFF;
-    int size; MPI_Get_count(&status, MPI_BYTE, &size);
     int thread_x = (dest_x - proc_x*N_thread_x);
     int thread_y = (dest_y - proc_y*N_thread_y);
     int threadid = thread_x * N_thread_y + thread_y;
     send_virtual_message(threadid, message_buffer, size);
   }
+  
+  //Free and return
+  free(message_buffer);
+  return 0;
 }
 
 //================================================================================
@@ -414,7 +420,6 @@ int main(int argc, char* argv[]){
       }
     }
   }
-  MPI_Barrier(MPI_COMM_WORLD);
 
   // Create virtual network
   init_virtual_network(N_thread_x, N_thread_y);
@@ -424,13 +429,13 @@ int main(int argc, char* argv[]){
   pthread_create(&mpi_receive_thread, NULL, &mpi_thread, NULL);
 
   // Start the virtual network
+  MPI_Barrier(MPI_COMM_WORLD); //Wait for all threads to initialize their network and create a receive thread
   start_virtual_network(chip_thread);
 
-  // Stop the MPI Thread  
-  pthread_cancel(mpi_receive_thread);
-  char dummy;
-  MPI_Send(&dummy, 1, MPI_BYTE, rank, 0, MPI_COMM_WORLD);
-  pthread_join(mpi_receive_thread, NULL);
+  // Stop the MPI Thread
+  MPI_Barrier(MPI_COMM_WORLD);                          //Wait for virtual_network on all nodes to end
+  MPI_Send(NULL, 0, MPI_BYTE, rank, 0, MPI_COMM_WORLD); //Send 0-byte stop message
+  pthread_join(mpi_receive_thread, NULL);               //Wait for finish
 
   // Wait for simulation to finish and gather results
   MPI_Barrier(MPI_COMM_WORLD);
@@ -463,6 +468,7 @@ int main(int argc, char* argv[]){
 
   // Free allocated memory
   free(shared_s);
+  free_virtual_network();
 
   // Cleanup MPI
   MPI_Finalize();

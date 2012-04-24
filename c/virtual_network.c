@@ -269,6 +269,9 @@ void start_virtual_network(processor_main_function p_main){
   //Wait for Processors to finish processing
   for(int i=0; i<num_processors; i++)
     pthread_join(processors[i].thread, NULL);
+}
+
+void free_virtual_network(){
   //Free Processor Memory and Processor Array
   for(int i=0; i<num_processors; i++)
     free_processor(&processors[i]);
