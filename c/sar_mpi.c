@@ -6,6 +6,8 @@
 #include <string.h>
 #include "sar.h"
 #include "virtual_network.h"
+#include <unistd.h>
+#include <sched.h>
 
 //================================================================================
 //================== Network Parameters ==========================================
@@ -17,6 +19,8 @@
 int proc_x, proc_y, proc;
 int N_proc_x, N_proc_y;
 int N_thread_x, N_thread_y;
+pthread_mutex_t network_mutex;
+complex *Wkn_fft, *Wkn_ifft;
 
 //================================================================================
 //===================== Network Functions ========================================
@@ -55,7 +59,24 @@ void send_message(int src_ant_x, int src_ant_y, int dest_ant_x, int dest_ant_y,
   else {
     int dest_rank = dest_proc_x * N_proc_y + dest_proc_y;
     int dest_tag = (dest_ant_x << 8) + dest_ant_y;
-    MPI_Send(send_buf, size + header_size, MPI_BYTE, dest_rank, dest_tag, MPI_COMM_WORLD);
+    //pthread_mutex_lock(&network_mutex);
+    //MPI_Send(send_buf, size + header_size, MPI_BYTE, dest_rank, dest_tag, MPI_COMM_WORLD);
+    //pthread_mutex_unlock(&network_mutex);
+    MPI_Request request; MPI_Status status;
+    pthread_mutex_lock(&network_mutex);
+    MPI_Isend(send_buf, size + header_size, MPI_BYTE, dest_rank, dest_tag, MPI_COMM_WORLD, &request);
+    pthread_mutex_unlock(&network_mutex);
+
+    int send_complete = 0;
+    while(!send_complete) {
+      pthread_mutex_lock(&network_mutex);
+      MPI_Test(&request, &send_complete, &status);
+      pthread_mutex_unlock(&network_mutex);
+      sched_yield();
+    }
+
+
+    //MPI_Wait(&request, &status);
   }
 }
 
@@ -150,14 +171,28 @@ char* receive_col(int ant_x, int ant_y, int* src_x, int* src_y, int* size, int t
 // virtual processor.
 void* mpi_thread(void* args){
   char* message_buffer = (char*)malloc(message_memory);
+  MPI_Request request; MPI_Status status;
+  int recv_complete; 
   while(1){
-    MPI_Status status;
-    MPI_Recv(message_buffer, message_memory, MPI_BYTE,
-             MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
+    recv_complete = 0;
+    pthread_mutex_lock(&network_mutex);
+    MPI_Irecv(message_buffer, message_memory, MPI_BYTE,
+             MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &request);
+    pthread_mutex_unlock(&network_mutex);
+
+    //MPI_Wait(&request, &status);
+
+    while(!recv_complete) {
+      pthread_mutex_lock(&network_mutex);
+      MPI_Test(&request, &recv_complete, &status);
+      pthread_mutex_unlock(&network_mutex);
+      sched_yield();
+    }
+
     int size; MPI_Get_count(&status, MPI_BYTE, &size);
 
     //Test whether we received the 0-byte stop message
-    if(size == 0)
+    if(size == 1)
       break;
     
     //Compute destination
@@ -168,7 +203,26 @@ void* mpi_thread(void* args){
     int threadid = thread_x * N_thread_y + thread_y;
     send_virtual_message(threadid, message_buffer, size);
   }
-  
+/*
+  while(1){
+    MPI_Status status;
+    MPI_Recv(message_buffer, message_memory, MPI_BYTE,
+             MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
+    int size; MPI_Get_count(&status, MPI_BYTE, &size);
+
+    //Test whether we received the 0-byte stop message
+    if(size == 1)
+      break;
+    
+    //Compute destination
+    int dest_x = status.MPI_TAG >> 8;
+    int dest_y = status.MPI_TAG & 0xFF;
+    int thread_x = (dest_x - proc_x*N_thread_x);
+    int thread_y = (dest_y - proc_y*N_thread_y);
+    int threadid = thread_x * N_thread_y + thread_y;
+    send_virtual_message(threadid, message_buffer, size);
+  }
+*/  
   //Free and return
   free(message_buffer);
   return 0;
@@ -201,66 +255,63 @@ void* chip_thread(int threadid)
   // Start doing SAR work
   // Locate my memory
   complex* s_local_1 = shared_s + threadid * Nf;
-  //complex* s_local_2 = (complex*)safe_malloc(Nf * sizeof(complex), "Failed to initialize s.");
+  complex* s_local_2 = (complex*)safe_malloc(Nf * sizeof(complex), "Failed to initialize s.");
 
   // Generate some fake data
-  for(int i=0; i<Nf; i++){
+/*  for(int i=0; i<Nf; i++){
     int* words = (int*)(&s_local_1[i]);
     words[0] = (ant_x << 16) + ant_y;
     words[1] = i;
   }
-  
+*/  
   // Send my local data to all processors in row
   // Every processor (x,y) sends an array, s_local_1, of size Nf, where
   // s_local_1[k] corresponds to s[x, y, k]
   send_row(ant_x, ant_y, (char*)s_local_1, Nf * sizeof(complex), send_buf);
 
-  // Receive neighbours data
-  // Receive row_s[src_x, k] from neighbours
-  // where row_s[src_x, k] corresponds to s[src_x, ant_y, k]
-  // Extract values from row_s where src_x = 0 to 127
-  //                     v1 = s[src_x, ant_y, 2*ant_x] = row_s[src_x, 2*ant_x]
-  //                     v2 = s[src_x, ant_y, 2*ant_x + 1] = row_s[src_x, 2*ant_x + 1]
-  // Store values
-  //                     v1 -> s_local_1[src_x]
-  //                     v2 -> s_local_1[src_x+128]
-  
   // Copy our own data to the correct location
-  //s_local_1[ant_x] = s_local_1[2*ant_x];
-  //s_local_1[ant_x + Nf/2] = s_local_1[2*ant_x + 1];
+  s_local_1[ant_x] = s_local_1[2*ant_x];
+  s_local_1[ant_x + Nf/2] = s_local_1[2*ant_x + 1];
+  
   // Receive neighbours data
   int step_1_count = 0;
   int step_2_count = 0;
+  int step_3_count = 0;
+  int step_4_count = 0;
+  int step_5_count = 0;
+  int step_6_count = 0;
+
   while(step_1_count < Nx - 1) {
     int src_x, src_y, size;
     complex* msg = (complex*)receive_and_forward(ant_x, ant_y, &src_x, &src_y, &size, threadid, send_buf);
-    
-    /* if(src_y == ant_y){ */
-    /*   //Step 1 */
-    /*   complex v1 = msg[2*ant_x]; */
-    /*   complex v2 = msg[2*ant_x + 1]; */
-    /*   s_local_1[src_x] = v1; */
-    /*   s_local_1[src_x+Nf/2] = v2; */
-    /*   step_1_count++; */
-    /* } */
-    /* else if(src_x == ant_x){ */
-    /*   //Step 2 */
-    /*   /\*       */
-    /*   complex v1 = msg[2*ant_y]; */
-    /*   complex v2 = msg[2*ant_y+1]; */
-    /*   s_local_2[src_y] = v1; */
-    /*   s_local_2[src_y + Nf/2] = v2; */
-    /*   step_2_count++; */
-    /*   *\/ */
-    /*   printf("ERROR: unreachable statement (step 2)\n"); */
-    /* } */
-    
+
+    if(src_y == ant_y){
+      //Step 1
+      complex v1 = msg[2*ant_x];
+      complex v2 = msg[2*ant_x + 1];
+      s_local_1[src_x] = v1;
+      s_local_1[src_x+Nf/2] = v2;
+      step_1_count++;
+    }
+    else if(src_x == ant_x){
+      //Step 2
+      complex v1 = msg[ant_y];
+      complex v2 = msg[ant_y+Nf/2];
+      s_local_2[src_y] = v1;
+      s_local_2[src_y + Nf/2] = v2;
+      step_2_count++;
+    }
+
     free_message(threadid);
-    step_1_count++;
   }
 
-  // Debugging
-  if(ant_x == 42 && ant_y == 31){
+  // Do 2 1D FFTs (one for each frequency band) each of Nx points
+  fft_1d(s_local_1,      Nx, 1, Wkn_fft);
+  fft_1d(s_local_1 + Nx, Nx, 1, Wkn_fft);
+
+  // Print out some values
+  if(ant_x == 7 && ant_y == 20){
+    printf("Finished Data for (7,20):\n");
     for(int i=0; i<Nf; i++){
       int* word = (int*)(&s_local_1[i]);
       printf("[x=%d, y=%d, f=%d]\n", word[0] >> 16, word[0] & 0xFFFF, word[1]);
@@ -268,73 +319,249 @@ void* chip_thread(int threadid)
     printf("[Step 1] Data exchange across row complete\n");
   }
 
-  // Perform a 1D FFT twice (one for each set of frequency).
-
-  // Send my local data to all processors in my column
-  // Every processor (x,y) sends an array, s_local, of size Nf, where
-  // s_local[k] corresponds to :
-  //    s[k, ant_y, 2*ant_x]        if k < Nf/2,
-  //    s[k-128, ant_y, 2*ant_x+1]  otherwise.
-  //
-  // Receive neighbours data, col_s[src_y, i], from neighbours
-  // where col_s[src_y, i] corresponds to :
-  //    s[i, src_y, 2*ant_x]        if i < Nf/2,
-  //    s[i-128, src_y, 2*ant_x+1]  otherwise.
-  // Extract values from col_s where ? = 0 to 127
-  //         v1 = s[
-  //
-  //   s[?,?,?]
-
   // Send my local data to all processors in column
-  /*  
   send_col(ant_x, ant_y, (char*)s_local_1, Nf * sizeof(complex), send_buf);
-  
+
+  // Copy out own data
+  s_local_2[ant_y] = s_local_1[ant_y];
+  s_local_2[ant_y + Nf/2] = s_local_1[ant_y + Nf/2];
+
+  // Receive neighbours data
   while(step_2_count < Ny - 1) {
     int src_x, src_y, size;
     complex* msg = (complex*)receive_and_forward(ant_x, ant_y, &src_x, &src_y, &size, threadid, send_buf);
     if(src_x == ant_x){
       //Step 2
-      complex v1 = msg[2*ant_y];
-      complex v2 = msg[2*ant_y+1];
+      complex v1 = msg[ant_y];
+      complex v2 = msg[ant_y+Nf/2];
       s_local_2[src_y] = v1;
       s_local_2[src_y + Nf/2] = v2;
       step_2_count++;
     }
     else if(src_y == ant_y){
       //Step 3
-      printf("ERROR: Unreachable Statement Step 3\n");
+      complex v1 = msg[ant_x];
+      complex v2 = msg[ant_x + Nf/2];
+      s_local_1[2*src_x] = v1;
+      s_local_1[2*src_x+1] = v2;
+      step_3_count++;
     }
     free_message(threadid);
   }
-  */
-  /*
-  // Copy our own data to the correct location
-  s_local_1[ant_y] = s_local_1[2*ant_y];
-  s_local_1[ant_y + Nf/2] = s_local_1[2*ant_y + 1];
 
-  // Receive neighbours data
-  for(int i=0; i<Ny-1; i++) {
-    int src_x, src_y, size;
-    complex* msg = (complex*)receive_col(ant_x, ant_y, &src_x, &src_y, &size, threadid, send_buf);
-    complex v1 = msg[2*ant_y];
-    complex v2 = msg[2*ant_y+1];
-    s_local_1[src_y] = v1;
-    s_local_1[src_y + Nf/2] = v2;
-    free_message(threadid);
-  }
-  
-
-  // Debugging
-  if(ant_x == 42 && ant_y == 31){
+  // Print out some values
+  if(ant_x == 7 && ant_y == 20){
     for(int i=0; i<Nf; i++){
       int* word = (int*)(&s_local_2[i]);
       printf("[x=%d, y=%d, f=%d]\n", word[0] >> 16, word[0] & 0xFFFF, word[1]);
     }
-    printf("[Step 2] Data exchange across column complete\n");
+    printf("[Step 2] Data exchange across columns complete\n");
   }
-  */
+
+  // Do 2 1D FFT (one for each frequency band) each of Ny points
+  fft_1d(s_local_2, Ny, 1, Wkn_fft);
+  fft_1d(s_local_2+Ny, Ny, 1, Wkn_fft);
+  
+  // Send my local data to all processors in row
+  send_row(ant_x, ant_y, (char*)s_local_2, Nf * sizeof(complex), send_buf);
+
+  // Copy out own data
+  s_local_1[2*ant_x] = s_local_2[ant_x];
+  s_local_1[2*ant_x+1] = s_local_2[ant_x + Nf/2];
+
+  // Receive neighbours data
+  while(step_3_count < Nx - 1) {
+    int src_x, src_y, size;
+    complex* msg = (complex*)receive_and_forward(ant_x, ant_y, &src_x, &src_y, &size, threadid, send_buf);
+    if(src_y == ant_y){
+      //Step 3
+      complex v1 = msg[ant_x];
+      complex v2 = msg[ant_x + Nf/2];
+      s_local_1[2*src_x] = v1;
+      s_local_1[2*src_x+1] = v2;
+      step_3_count++;
+    }
+    else if(src_x == ant_x){
+      //Step 4
+      complex v1 = msg[2*ant_y];
+      complex v2 = msg[2*ant_y+1];
+      s_local_2[src_y] = v1;
+      s_local_2[src_y + Nf/2] = v2;
+      step_4_count++;
+    }
+    free_message(threadid);
+  }  
+
+  // Print out some values
+  if(ant_x == 7 && ant_y == 20){
+    for(int i=0; i<Nf; i++){
+      int* word = (int*)(&s_local_1[i]);
+      printf("[x=%d, y=%d, f=%d]\n", word[0] >> 16, word[0] & 0xFFFF, word[1]);
+    }
+    printf("[Step 3] Data exchange across rows complete\n");
+  }
+
+  // Multiply each element by complex exponential
+  float kx = ant_y < Nx/2 ?
+    2*pi/Dx * ant_y/Nx :
+    2*pi/Dx * (ant_y - Nx)/Nx;
+  float ky = ant_x < Ny/2 ?
+    2*pi/Dy * ant_x/Ny :
+    2*pi/Dy * (ant_x - Ny)/Ny;
+  for(int n=0; n<Nf; n++){
+    float w = 2*pi*(f0 + n*Df);
+    float k = w/c_speed;
+    float kz = sqrt(4*k*k - kx*kx - ky*ky);
+    
+    complex phi = c_jexp(kz * z0);
+    s_local_1[n] = c_mult(s_local_1[n], phi);
+  }
+
+  // Do linear interpolation over the entire array of Nf points
+  float w_min = 2*pi * f0;
+  float w_max = 2*pi * (f0 + (Nf - 1)*Df);
+  float k_min = w_min / c_speed;
+  float k_max = w_max / c_speed;
+  float kx_max = 2*pi/Dx * 0.5 * (Nx-1)/Nx;
+  float ky_max = 2*pi/Dy * 0.5 * (Ny-1)/Ny;
+  float kz_min = sqrt(4*k_min*k_min - kx_max*kx_max - ky_max*ky_max);
+  float kz_max = sqrt(4*k_max*k_max);
+
+  float n_interp[Nf];
+  for(int n=0; n<Nf; n++){
+    float kz = kz_min + (kz_max - kz_min) * n/(Nf - 1);
+    float k = 0.5 * sqrt(kx*kx + ky*ky + kz*kz);
+    n_interp[n] = (c_speed*k/(2*pi) - f0)/Df;
+  }
+  resample_1d(s_local_1, Nf, 1, n_interp);
+
+  // Do a 1D IFFT over entire array of Nf points
+  ifft_1d(s_local_1, Nf, 1, Wkn_ifft);
+
+  send_col(ant_x, ant_y, (char*)s_local_1, Nf * sizeof(complex), send_buf);
+
+  // Copy out own data
+  s_local_2[ant_y] = s_local_1[2*ant_y];
+  s_local_2[ant_y + Nf/2] = s_local_1[2*ant_y+1];
+
+  // Receive neighbours data
+  while(step_4_count < Ny - 1) {
+    int src_x, src_y, size;
+    complex* msg = (complex*)receive_and_forward(ant_x, ant_y, &src_x, &src_y, &size, threadid, send_buf);
+    if(src_x == ant_x){
+      //Step 4
+      complex v1 = msg[2*ant_y];
+      complex v2 = msg[2*ant_y+1];
+      s_local_2[src_y] = v1;
+      s_local_2[src_y + Nf/2] = v2;
+      step_4_count++;
+    }
+    else if(src_y == ant_y){
+      //Step 5
+      complex v1 = msg[ant_x];
+      complex v2 = msg[ant_x + Nf/2];
+      s_local_1[src_x] = v1;
+      s_local_1[src_x+Nf/2] = v2;
+      step_5_count++;
+    }
+    free_message(threadid);
+  }
+
+  // Print out some values
+  if(ant_x == 7 && ant_y == 20){
+    for(int i=0; i<Nf; i++){
+      int* word = (int*)(&s_local_2[i]);
+      printf("[x=%d, y=%d, f=%d]\n", word[0] >> 16, word[0] & 0xFFFF, word[1]);
+    }
+    printf("[Step 4] Data exchange across columns complete\n");
+  }
+
+
+  // Do 2 1D FFTs, each of Nx points
+  ifft_1d(s_local_2, Nx, 1, Wkn_ifft);
+  ifft_1d(s_local_2+Nx, Nx, 1, Wkn_ifft);
+
+  send_row(ant_x, ant_y, (char*)s_local_2, Nf * sizeof(complex), send_buf);
+
+  // Copy out own data
+  s_local_1[ant_x] = s_local_2[ant_x];
+  s_local_1[ant_x + Nf/2] = s_local_2[ant_x + Nf/2];
+
+  // Receive neighbours data
+  while(step_5_count < Nx - 1) {
+    int src_x, src_y, size;
+    complex* msg = (complex*)receive_and_forward(ant_x, ant_y, &src_x, &src_y, &size, threadid, send_buf);
+    if(src_y == ant_y){
+      //Step 5
+      complex v1 = msg[ant_x];
+      complex v2 = msg[ant_x + Nf/2];
+      s_local_1[src_x] = v1;
+      s_local_1[src_x+Nf/2] = v2;
+      step_5_count++;
+    }
+    else if(src_x == ant_x){
+      //Step 6
+      complex v1 = msg[ant_y];
+      complex v2 = msg[ant_y+Nf/2];
+      s_local_2[2*src_y] = v1;
+      s_local_2[2*src_y + 1] = v2;
+      step_6_count++;
+    }
+    free_message(threadid);
+  }  
+
+  // Print out some values
+  if(ant_x == 7 && ant_y == 20){
+    for(int i=0; i<Nf; i++){
+      int* word = (int*)(&s_local_1[i]);
+      printf("[x=%d, y=%d, f=%d]\n", word[0] >> 16, word[0] & 0xFFFF, word[1]);
+    }
+    printf("[Step 5] Data exchange across rows complete\n");
+  }
+
+  // Do 2 1D FFts, each of Ny points
+  ifft_1d(s_local_1, Ny, 1, Wkn_ifft);
+  ifft_1d(s_local_1+Ny, Ny, 1, Wkn_ifft);
+
+  send_col(ant_x, ant_y, (char*)s_local_1, Nf * sizeof(complex), send_buf);
+
+  // Copy out own data
+  s_local_2[2*ant_y] = s_local_1[ant_y];
+  s_local_2[2*ant_y + 1] = s_local_1[ant_y + Nf/2];
+
+  // Receive neighbours data
+  while(step_6_count < Ny - 1) {
+    int src_x, src_y, size;
+    complex* msg = (complex*)receive_and_forward(ant_x, ant_y, &src_x, &src_y, &size, threadid, send_buf);
+    if(src_x == ant_x){
+      //Step 6
+      complex v1 = msg[ant_y];
+      complex v2 = msg[ant_y+Nf/2];
+      s_local_2[2*src_y] = v1;
+      s_local_2[2*src_y + 1] = v2;
+      step_6_count++;
+    }
+    else if(src_y == ant_y){
+      //Step 7
+      printf("Unreachable Statement\n");
+    }
+    free_message(threadid);
+  }
+
+  // Copy s_local_2 to s_local_1 for gather operation
+  memcpy(s_local_1, s_local_2, Nf*sizeof(complex));
+
+  // Print out some values
+  if(ant_x == 7 && ant_y == 20){
+    for(int i=0; i<Nf; i++){
+      int* word = (int*)(&s_local_2[i]);
+      printf("[x=%d, y=%d, f=%d]\n", word[0] >> 16, word[0] & 0xFFFF, word[1]);
+    }
+    printf("[Step 6] Data exchange across columns complete\n");
+  }
+
   // Finish thread
-  //free(s_local_2);
+  free(s_local_2);
   free(send_buf);
   pthread_exit(NULL);
 }
@@ -369,14 +596,15 @@ int main(int argc, char* argv[]){
 
   // Initialize MPI
   // Initialize, get rank and size
-  int N_proc, rank;
-  MPI_Init(&argc, &argv);
+  int N_proc, rank, thread_support;
+  MPI_Init_thread(&argc, &argv, MPI_THREAD_SERIALIZED, &thread_support);
   MPI_Comm_size(MPI_COMM_WORLD, &N_proc);
   MPI_Comm_rank(MPI_COMM_WORLD, &rank);
   // Declare COMPLEX type
   MPI_Datatype COMPLEX;
   MPI_Type_contiguous(2, MPI_FLOAT, &COMPLEX);
   MPI_Type_commit(&COMPLEX);
+  pthread_mutex_init(&network_mutex, NULL);
   
   if(rank == 0)
     printf("Starting MPI-based SAR Simulation\n");
@@ -395,8 +623,10 @@ int main(int argc, char* argv[]){
   N_thread_y = Ny / N_proc_y;
 
   // Create local memory for each simulated wallpaper chip
+
   shared_s = (complex*)safe_malloc(Nf * N_thread_x * N_thread_y * sizeof(complex),
                   "Failed to malloc memory for s");
+
   complex* file_buf = (complex*)safe_malloc(Nx * Ny * Nf * sizeof(complex),
                   "Failed to malloc memory for file_buf");
   complex* recv_buf = (complex*)safe_malloc(Nx * Ny * Nf * sizeof(complex),
@@ -421,6 +651,10 @@ int main(int argc, char* argv[]){
     }
   }
 
+  // Compute FFT Coefficients
+  Wkn_fft = precompute_fft_coefficients();
+  Wkn_ifft = precompute_ifft_coefficients();
+
   // Create virtual network
   init_virtual_network(N_thread_x, N_thread_y);
 
@@ -429,16 +663,16 @@ int main(int argc, char* argv[]){
   pthread_create(&mpi_receive_thread, NULL, &mpi_thread, NULL);
 
   // Start the virtual network
-  MPI_Barrier(MPI_COMM_WORLD); //Wait for all threads to initialize their network and create a receive thread
   start_virtual_network(chip_thread);
 
   // Stop the MPI Thread
-  MPI_Barrier(MPI_COMM_WORLD);                          //Wait for virtual_network on all nodes to end
-  MPI_Send(NULL, 0, MPI_BYTE, rank, 0, MPI_COMM_WORLD); //Send 0-byte stop message
+  char dummy;
+  MPI_Send(&dummy, 1, MPI_BYTE, rank, 0, MPI_COMM_WORLD); //Send 0-byte stop message
   pthread_join(mpi_receive_thread, NULL);               //Wait for finish
 
   // Wait for simulation to finish and gather results
   MPI_Barrier(MPI_COMM_WORLD);
+
   // Node 0 gathers the results from all other nodes
   MPI_Gather(shared_s, N_thread_x * N_thread_y * Nf, COMPLEX, recv_buf,
              N_thread_x * N_thread_y * Nf, COMPLEX, 0, MPI_COMM_WORLD);  
@@ -466,11 +700,17 @@ int main(int argc, char* argv[]){
     write_data(file_buf, "scene_4_mpi.out");
   }
 
+
   // Free allocated memory
-  free(shared_s);
   free_virtual_network();
+  free(shared_s);
+  free(file_buf);
+  free(recv_buf);
+  free(Wkn_fft);
+  free(Wkn_ifft);
 
   // Cleanup MPI
   MPI_Finalize();
+  pthread_mutex_destroy(&network_mutex);
   pthread_exit(NULL);
 }
