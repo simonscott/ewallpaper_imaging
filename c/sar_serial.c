@@ -59,6 +59,33 @@ void ifft_3d(complex* x, int nx, int ny, int nz, int x_stride, int y_stride, int
       ifft_1d(x + i * x_stride + j * y_stride, nz, z_stride, Wkn_ifft);
 }
 
+
+void read_original_data(complex* data, char* filename){
+  FILE* file = fopen(filename, "r");
+  if(!file) {
+    printf("File %s could not be found.\n", filename);
+    exit(-1);
+  }
+  
+  int n = 0;
+  int i, j, k;
+  complex num;
+
+  for(i=0; i < 128; i++)
+    for(j=0; j < 128; j++)
+      for(k=0; k < 256; k++){
+        fscanf(file, "%f, %f\n", &num.real, &num.imag);
+        if(i % (128/Nx) == 0 &&
+           j % (128/Ny) == 0 &&
+           k % (256/Nf) == 0){
+          data[n] = num;
+          n++;
+        }
+      }
+
+  fclose(file);
+}
+
 int main(int argc, char** argv) {
   //Precompute FFT coefficients
   Wkn_fft = precompute_fft_coefficients();
@@ -74,8 +101,9 @@ int main(int argc, char** argv) {
   printf("Reading Data ...\n");
   tick();
   complex* s = (complex*)safe_malloc(Nx * Ny * Nf * sizeof(complex),
-                         "Failed to allocate memory for radar data.");  
-  read_data(s, "scene_4.dat");
+                         "Failed to allocate memory for radar data.");
+  read_original_data(s, "scene_4.dat");
+  //read_data(s, "scene_4.dat");
   tock();
 
   // Perform a single 2D FFT for each frequency
