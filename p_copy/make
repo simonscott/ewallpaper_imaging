@@ -1,0 +1,4 @@
+#gcc -O3 sar_serial.c sar.c -std=c99 -o sar
+#gcc -O3 virtual_network.c network_example.c -pedantic -Wall -std=c99 -lpthread -o virtual_network
+#gcc network.c -std=c99 -lpthread -o network
+gcc virtual_network.c network_sar.c sar.c -std=c99 -lpthread -o network

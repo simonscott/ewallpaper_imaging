@@ -1,0 +1,11 @@
+#PBS -V
+#PBS -l mppwidth=64
+#PBS -l mppnppn=16
+#PBS -l mppdepth=1
+#PBS -l walltime=0:02:00
+#PBS -o sar_mpi.stdout
+#PBS -j oe
+
+#cd $PBS_O_WORKDIR
+cd /global/u1/p/psli2/wallpaper/p_copy
+aprun -d 1 -n 64 -N 16 ./sar_mpi
