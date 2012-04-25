@@ -1,7 +1,13 @@
 function data = read_raw_file(filename)
-Nx = 128;
-Ny = 128;
-Nz = 256;
+
+% Nx = 128;
+% Ny = 128;
+% Nz = 256;
+
+Nx = 32;
+Ny = 32;
+Nz = 64;
+
 data = zeros(Nx, Ny, Nz);
 n = 1;
 

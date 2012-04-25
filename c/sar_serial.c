@@ -17,11 +17,9 @@ complex* Wkn_ifft;
 //    Element x[i,j] is located at x[i * x_stride + j * y_stride]
 //    So each column starts at x + i * x_stride + 0 * y_stride, has length ny, and stride y_stride
 void fft_2d(complex* x, int nx, int ny, int x_stride, int y_stride) {
-  int i, j;
-
-  for(j=0; j<ny; j++)
+  for(int j=0; j<ny; j++)
     fft_1d(x + j * y_stride, nx, x_stride, Wkn_fft);
-  for(i=0; i<nx; i++)
+  for(int i=0; i<nx; i++)
     fft_1d(x + i * x_stride, ny, y_stride, Wkn_fft);
 }
 
@@ -51,12 +49,40 @@ void ifft_2d(complex* x, int nx, int ny, int x_stride, int y_stride) {
 void ifft_3d(complex* x, int nx, int ny, int nz, int x_stride, int y_stride, int z_stride) {
   int i, j, k;
 
-  for(k=0; k<nz; k++)
-    ifft_2d(x + k * z_stride, nx, ny, x_stride, y_stride);
-
   for(i=0; i<nx; i++)
     for(j=0; j<ny; j++)
       ifft_1d(x + i * x_stride + j * y_stride, nz, z_stride, Wkn_ifft);
+  
+  for(k=0; k<nz; k++)
+    ifft_2d(x + k * z_stride, nx, ny, x_stride, y_stride);
+
+}
+
+
+void read_original_data(complex* data, char* filename){
+  FILE* file = fopen(filename, "r");
+  if(!file) {
+    printf("File %s could not be found.\n", filename);
+    exit(-1);
+  }
+  
+  int n = 0;
+  int i, j, k;
+  complex num;
+
+  for(i=0; i < 128; i++)
+    for(j=0; j < 128; j++)
+      for(k=0; k < 256; k++){
+        fscanf(file, "%f, %f\n", &num.real, &num.imag);
+        if(i % (128/Nx) == 0 &&
+           j % (128/Ny) == 0 &&
+           k % (256/Nf) == 0){
+          data[n] = num;
+          n++;
+        }
+      }
+
+  fclose(file);
 }
 
 int main(int argc, char** argv) {
@@ -74,8 +100,9 @@ int main(int argc, char** argv) {
   printf("Reading Data ...\n");
   tick();
   complex* s = (complex*)safe_malloc(Nx * Ny * Nf * sizeof(complex),
-                         "Failed to allocate memory for radar data.");  
-  read_data(s, "scene_4.dat");
+                         "Failed to allocate memory for radar data.");
+  read_original_data(s, "scene_4.dat");
+  //read_data(s, "scene_4.dat");
   tock();
 
   // Perform a single 2D FFT for each frequency
@@ -123,7 +150,8 @@ int main(int argc, char** argv) {
         float kz = sqrt(4*k*k - kx*kx - ky*ky);
         
         complex phi = c_jexp(kz * z0);
-        s[i * Ny * Nf + j * Nf + n] = c_mult(s[i * Ny * Nf + j * Nf + n], phi);        
+        s[i * Ny * Nf + j * Nf + n] = phi;
+        //        s[i * Ny * Nf + j * Nf + n] = c_mult(s[i * Ny * Nf + j * Nf + n], phi);
       }
   tock();
 
@@ -161,35 +189,35 @@ int main(int argc, char** argv) {
   // 6.   resample this line in s on interpolated indices n_interp
   //         s[i,j,n] is at s[i * Ny * Nf + j * Nf + n] thus this line
   //           starts at s + i * Ny * Nf + j * Nf + 0, has length Nf, and has stride 1
-  printf("Performing Stolt Interpolation.\n");
-  tick();
-  for(i=0; i<Nx; i++)
-    for(j=0; j<Ny; j++){
-      float kx = i < Nx/2 ?
-        2*pi/Dx * i/Nx :
-        2*pi/Dx * (i - Nx)/Nx;
-      float ky = j < Ny/2 ?
-        2*pi/Dy * j/Ny :
-        2*pi/Dy * (j - Ny)/Ny;
+  /* printf("Performing Stolt Interpolation.\n"); */
+  /* tick(); */
+  /* for(i=0; i<Nx; i++) */
+  /*   for(j=0; j<Ny; j++){ */
+  /*     float kx = i < Nx/2 ? */
+  /*       2*pi/Dx * i/Nx : */
+  /*       2*pi/Dx * (i - Nx)/Nx; */
+  /*     float ky = j < Ny/2 ? */
+  /*       2*pi/Dy * j/Ny : */
+  /*       2*pi/Dy * (j - Ny)/Ny; */
 
-      float n_interp[Nf];
-      for(n=0; n<Nf; n++){
-        float kz = kz_min + (kz_max - kz_min) * n/(Nf - 1);
-        float k = 0.5 * sqrt(kx*kx + ky*ky + kz*kz);
-        n_interp[n] = (c_speed*k/(2*pi) - f0)/Df;
-      }
+  /*     float n_interp[Nf]; */
+  /*     for(n=0; n<Nf; n++){ */
+  /*       float kz = kz_min + (kz_max - kz_min) * n/(Nf - 1); */
+  /*       float k = 0.5 * sqrt(kx*kx + ky*ky + kz*kz); */
+  /*       n_interp[n] = (c_speed*k/(2*pi) - f0)/Df; */
+  /*     } */
       
-      resample_1d(s + i*Ny*Nf + j*Nf, Nf, 1, n_interp);
-    }
-  tock();
+  /*     resample_1d(s + i*Ny*Nf + j*Nf, Nf, 1, n_interp); */
+  /*   } */
+  /* tock(); */
 
   // Perform a 3D IFFT on the signal
   // Each element s[i,j,n] is located at s[i * Ny * Nf + j * Nf + n]
   // Thus x-stride = Ny*Nf, y-stride = Nf, and z-stride = 1
-  printf("Performing IFFT.\n");
-  tick();
-  ifft_3d(s, Nx, Ny, Nf, Ny*Nf, Nf, 1);
-  tock();
+  /* printf("Performing IFFT.\n"); */
+  /* tick(); */
+  /* ifft_3d(s, Nx, Ny, Nf, Ny*Nf, Nf, 1); */
+  /* tock(); */
 
   // End the simulation by writing out the computed signal and write it out to a file.
   // Pass the computed matrix and a output filename to write_data()

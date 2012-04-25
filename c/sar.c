@@ -61,7 +61,7 @@ complex c_scalar_div(complex x, float a) {
 // c_print(x) :
 // Prints out a complex number in form (real, imag)
 void c_print(complex x) {
-  printf("(%f, %f)", x.real, x.imag);
+  printf("(%.10f, %.10f)", x.real, x.imag);
 }
 
 //================================================================================
