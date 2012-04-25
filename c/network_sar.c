@@ -176,8 +176,8 @@ void* sar_main(int threadid){
     free_message(threadid);
   }
 
-  // Do 2 1D FFTs (one for each frequency band) each of Nx points
-  fft_1d(s_local_1, Nx, 1, Wkn_fft);
+  // Do 2 1D FFTs (one for each frequency band) each of Nx points  
+  fft_1d(s_local_1,      Nx, 1, Wkn_fft);
   fft_1d(s_local_1 + Nx, Nx, 1, Wkn_fft);
 
   // Print out some values
@@ -298,14 +298,15 @@ void* sar_main(int threadid){
     2*pi/Dx * (ant_x - Nx)/Nx;
   float ky = ant_y < Ny/2 ?
     2*pi/Dy * ant_y/Ny :
-    2*pi/Dy * (ant_y - Ny)/Ny;  
-  for(int n=0; n<Nf; n++){    
+    2*pi/Dy * (ant_y - Ny)/Ny;
+  for(int n=0; n<Nf; n++){
     float w = 2*pi*(f0 + n*Df);
     float k = w/c_speed;
     float kz = sqrt(4*k*k - kx*kx - ky*ky);
     
     complex phi = c_jexp(kz * z0);
-    s_local_1[n] = c_mult(s_local_1[n], phi);
+    s_local_1[n] = phi;
+    //    s_local_1[n] = c_mult(s_local_1[n], phi);
   }
 
   // Calculate the range of the Stolt interpolation indices.
@@ -348,12 +349,12 @@ void* sar_main(int threadid){
     float kz = kz_min + (kz_max - kz_min) * n/(Nf - 1);
     float k = 0.5 * sqrt(kx*kx + ky*ky + kz*kz);
     n_interp[n] = (c_speed*k/(2*pi) - f0)/Df;
-  }      
-  resample_1d(s_local_1, Nf, 1, n_interp);
+  }
+  //resample_1d(s_local_1, Nf, 1, n_interp);
   
   
   // Do a 1D IFFT over entire array of Nf points
-  ifft_1d(s_local_1, Nf, 1, Wkn_ifft);
+  //ifft_1d(s_local_1, Nf, 1, Wkn_ifft);
   
   send_col(ant_x, ant_y, (char*)s_local_1, Nf * sizeof(complex), send_buf);
 
@@ -397,8 +398,8 @@ void* sar_main(int threadid){
 
 
   // Do 2 1D FFTs, each of Nx points
-  ifft_1d(s_local_2, Nx, 1, Wkn_ifft);
-  ifft_1d(s_local_2+Nx, Nx, 1, Wkn_ifft);
+  //ifft_1d(s_local_2, Nx, 1, Wkn_ifft);
+  //ifft_1d(s_local_2+Nx, Nx, 1, Wkn_ifft);
 
   send_row(ant_x, ant_y, (char*)s_local_2, Nf * sizeof(complex), send_buf);
 
@@ -441,8 +442,8 @@ void* sar_main(int threadid){
   */
 
   // Do 2 1D FFts, each of Ny points
-  ifft_1d(s_local_1, Ny, 1, Wkn_ifft);
-  ifft_1d(s_local_1+Ny, Ny, 1, Wkn_ifft);
+  //ifft_1d(s_local_1, Ny, 1, Wkn_ifft);
+  //ifft_1d(s_local_1+Ny, Ny, 1, Wkn_ifft);
 
   send_col(ant_x, ant_y, (char*)s_local_1, Nf * sizeof(complex), send_buf);
 
@@ -470,15 +471,19 @@ void* sar_main(int threadid){
   }
 
   // Print out some values
-  /*
-  if(ant_x == 7 && ant_y == 20){
-    for(int i=0; i<Nf; i++){
-      int* word = (int*)(&s_local_2[i]);
-      printf("[x=%d, y=%d, f=%d]\n", word[0] >> 16, word[0] & 0xFFFF, word[1]);
-    }
-    printf("[Step 6] Data exchange across columns complete\n");
-  }
-  */
+  
+  /* if(ant_x == 7 && ant_y == 20){ */
+  /*   for(int i=0; i<Nf; i++){ */
+  /*     c_print(s_local_2[i]); */
+  /*     printf("\n"); */
+  /*     /\* */
+  /*     int* word = (int*)(&s_local_2[i]); */
+  /*     printf("[x=%d, y=%d, f=%d]\n", word[0] >> 16, word[0] & 0xFFFF, word[1]); */
+  /*     *\/ */
+  /*   } */
+  /*   printf("[Step 6] Data exchange across columns complete\n"); */
+  /* } */
+  
 
   // Write out our data
   for(int i=0; i<Nf; i++)
