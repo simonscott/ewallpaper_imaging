@@ -150,8 +150,7 @@ int main(int argc, char** argv) {
         float kz = sqrt(4*k*k - kx*kx - ky*ky);
         
         complex phi = c_jexp(kz * z0);
-        s[i * Ny * Nf + j * Nf + n] = phi;
-        //        s[i * Ny * Nf + j * Nf + n] = c_mult(s[i * Ny * Nf + j * Nf + n], phi);
+        s[i * Ny * Nf + j * Nf + n] = c_mult(s[i * Ny * Nf + j * Nf + n], phi);
       }
   tock();
 

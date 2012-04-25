@@ -177,8 +177,8 @@ void* sar_main(int threadid){
   }
 
   // Do 2 1D FFTs (one for each frequency band) each of Nx points  
-  fft_1d(s_local_1,      Nx, 1, Wkn_fft);
-  fft_1d(s_local_1 + Nx, Nx, 1, Wkn_fft);
+  // fft_1d(s_local_1,      Nx, 1, Wkn_fft);
+  // fft_1d(s_local_1 + Nx, Nx, 1, Wkn_fft);
 
   // Print out some values
   /*
@@ -233,8 +233,8 @@ void* sar_main(int threadid){
   */
 
   // Do 2 1D FFT (one for each frequency band) each of Ny points
-  fft_1d(s_local_2, Ny, 1, Wkn_fft);
-  fft_1d(s_local_2+Ny, Ny, 1, Wkn_fft);
+  // fft_1d(s_local_2, Ny, 1, Wkn_fft);
+  // fft_1d(s_local_2+Ny, Ny, 1, Wkn_fft);
   
   // Send my local data to all processors in row
   send_row(ant_x, ant_y, (char*)s_local_2, Nf * sizeof(complex), send_buf);
@@ -299,15 +299,14 @@ void* sar_main(int threadid){
   float ky = ant_y < Ny/2 ?
     2*pi/Dy * ant_y/Ny :
     2*pi/Dy * (ant_y - Ny)/Ny;
-  for(int n=0; n<Nf; n++){
-    float w = 2*pi*(f0 + n*Df);
-    float k = w/c_speed;
-    float kz = sqrt(4*k*k - kx*kx - ky*ky);
+  /* for(int n=0; n<Nf; n++){ */
+  /*   float w = 2*pi*(f0 + n*Df); */
+  /*   float k = w/c_speed; */
+  /*   float kz = sqrt(4*k*k - kx*kx - ky*ky); */
     
-    complex phi = c_jexp(kz * z0);
-    s_local_1[n] = phi;
-    //    s_local_1[n] = c_mult(s_local_1[n], phi);
-  }
+  /*   complex phi = c_jexp(kz * z0); */
+  /*   s_local_1[n] = c_mult(s_local_1[n], phi); */
+  /* } */
 
   // Calculate the range of the Stolt interpolation indices.
   // The minimum angular frequency, w_min = 2*pi * f0
