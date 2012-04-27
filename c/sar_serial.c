@@ -188,35 +188,35 @@ int main(int argc, char** argv) {
   // 6.   resample this line in s on interpolated indices n_interp
   //         s[i,j,n] is at s[i * Ny * Nf + j * Nf + n] thus this line
   //           starts at s + i * Ny * Nf + j * Nf + 0, has length Nf, and has stride 1
-  /* printf("Performing Stolt Interpolation.\n"); */
-  /* tick(); */
-  /* for(i=0; i<Nx; i++) */
-  /*   for(j=0; j<Ny; j++){ */
-  /*     float kx = i < Nx/2 ? */
-  /*       2*pi/Dx * i/Nx : */
-  /*       2*pi/Dx * (i - Nx)/Nx; */
-  /*     float ky = j < Ny/2 ? */
-  /*       2*pi/Dy * j/Ny : */
-  /*       2*pi/Dy * (j - Ny)/Ny; */
+  printf("Performing Stolt Interpolation.\n");
+  tick();
+  for(i=0; i<Nx; i++)
+    for(j=0; j<Ny; j++){
+      float kx = i < Nx/2 ?
+        2*pi/Dx * i/Nx :
+        2*pi/Dx * (i - Nx)/Nx;
+      float ky = j < Ny/2 ?
+        2*pi/Dy * j/Ny :
+        2*pi/Dy * (j - Ny)/Ny;
 
-  /*     float n_interp[Nf]; */
-  /*     for(n=0; n<Nf; n++){ */
-  /*       float kz = kz_min + (kz_max - kz_min) * n/(Nf - 1); */
-  /*       float k = 0.5 * sqrt(kx*kx + ky*ky + kz*kz); */
-  /*       n_interp[n] = (c_speed*k/(2*pi) - f0)/Df; */
-  /*     } */
+      float n_interp[Nf];
+      for(n=0; n<Nf; n++){
+        float kz = kz_min + (kz_max - kz_min) * n/(Nf - 1);
+        float k = 0.5 * sqrt(kx*kx + ky*ky + kz*kz);
+        n_interp[n] = (c_speed*k/(2*pi) - f0)/Df;
+      }
       
-  /*     resample_1d(s + i*Ny*Nf + j*Nf, Nf, 1, n_interp); */
-  /*   } */
-  /* tock(); */
+      resample_1d(s + i*Ny*Nf + j*Nf, Nf, 1, n_interp);
+    }
+  tock();
 
   // Perform a 3D IFFT on the signal
   // Each element s[i,j,n] is located at s[i * Ny * Nf + j * Nf + n]
   // Thus x-stride = Ny*Nf, y-stride = Nf, and z-stride = 1
-  /* printf("Performing IFFT.\n"); */
-  /* tick(); */
-  /* ifft_3d(s, Nx, Ny, Nf, Ny*Nf, Nf, 1); */
-  /* tock(); */
+  printf("Performing IFFT.\n");
+  tick();
+  ifft_3d(s, Nx, Ny, Nf, Ny*Nf, Nf, 1);
+  tock();
 
   // End the simulation by writing out the computed signal and write it out to a file.
   // Pass the computed matrix and a output filename to write_data()
