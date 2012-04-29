@@ -1,9 +1,6 @@
 from heapq import *
-import random
 
-# Flags to selectively enable parts of code
-graphics = 0;
-random_processing = 1;
+graphics = 1;
 
 if graphics:
   import numpy as np
@@ -63,11 +60,6 @@ bw_delay = (pkt_size * 8) / link_speed;
 resend_delay = bw_delay / 2;
 NUM_CYCLES = 4;
 
-# Random processing parameters
-mean_time = 2e-6;
-std_dev = 0.5e-6;
-min_time = 1e-6;
-max_time = 4e-6;
 
 # Define the event class
 # NOTE: the source is defined as the ORIGINAL source of the original message.
@@ -122,13 +114,6 @@ def print_event(e):
 
   return ret_str;
 
-# Function to generate random time
-def rand_time():
-  t = random.gauss(mean_time, std_dev);
-  if t < min_time: t = min_time;
-  if t > max_time: t = max_time;
-  return t;
-
 
 # Define each node in the network
 class Node:
@@ -148,7 +133,6 @@ class Node:
     self.finished = FALSE;
     self.send_buf = [EMPTY, EMPTY, EMPTY, EMPTY];
     self.recv_buf = [EMPTY, EMPTY, EMPTY, EMPTY];
-    self.recv_pending = [FALSE, FALSE, FALSE, FALSE];
     self.recv_complete = [FALSE, FALSE, FALSE, FALSE];
 
     self.add_event( Event(START_LEFT_RIGHT, startup_delay, SRC_SELF) );
@@ -255,6 +239,15 @@ class Node:
         else:
           self.state = RECV_UP;
 
+
+    # Event: NACK of send is received
+    # Resend message resend_delay time later
+    elif next_event.event_type == SEND_NACK_ARRIVE:
+      
+      neighbors[self.opp(next_event.source)].add_event( Event(PKT_HEAD_ARRIVE, time + latency + resend_delay, next_event.source) );
+      self.state = (SEND_LEFT) + self.opp(next_event.source);  
+      #print 'ERROR: unable to send message as dest receive buffer is full!';
+
     # Event: SEND finishes, and so send buffer is now available
     elif next_event.event_type == SEND_COMPLETE:
       self.send_buf[self.opp(next_event.source)] = EMPTY;
@@ -272,7 +265,7 @@ class Node:
 
       # Else no space in buffer
       else:
-        self.recv_pending[next_event.source] = TRUE;
+        neighbors[next_event.source].add_event( Event(SEND_NACK_ARRIVE, time + latency, next_event.source) );
 
     # Event: tail of a data packet is received
     elif next_event.event_type == PKT_TAIL_ARRIVE:
@@ -283,27 +276,23 @@ class Node:
 
       if self.state == (RECV_LEFT + direction) and self.recv_complete[direction]:
 
-        # If we can receive the message
-        # That is, If no neighbor on the opposite 'direction' side or
-        # If space in the opposite send buffer
-        if neighbors[self.opp(direction)] == -1 or self.send_buf[self.opp(direction)] == EMPTY:
+        # If no neighbor on the opposite 'direction' side
+        if neighbors[self.opp(direction)] == -1:
           self.recv_buf[direction] = EMPTY;
           self.recv_complete[direction] = FALSE;
           self.dir_msg_count[direction] += 1;
           self.msg_count += 1;
 
-          # If we have a neighbor in the opposite direction, forward message on
-          if neighbors[self.opp(direction)] != -1:
-            self.send_msg(self.opp(direction), neighbors);
-            self.state = (SEND_LEFT + self.opp(direction));
+        # If space in the opposite send buffer
+        elif self.send_buf[self.opp(direction)] == EMPTY:
+          self.recv_buf[direction] = EMPTY;
+          self.recv_complete[direction] = FALSE;
+          self.dir_msg_count[direction] += 1;
+          self.msg_count += 1;
 
-          # If a receive was pending (because receive buffer was full), send an ACK and start receiving next msg
-          if self.recv_pending[direction]: 
-            self.add_event( Event(PKT_TAIL_ARRIVE, time + 2*latency + bw_delay, direction) );
-            neighbors[direction].add_event( Event(SEND_ACK_ARRIVE, time + latency, direction) );
-            neighbors[direction].add_event( Event(SEND_COMPLETE, time + latency + bw_delay, direction) );
-            self.recv_pending[direction] = FALSE;
-            self.recv_buf[direction] = FULL;
+          # Send in the opposite direction
+          self.send_msg(self.opp(direction), neighbors);
+          self.state = (SEND_LEFT + self.opp(direction));
 
         # Else no space in the 'opposite' buffer
         else:
@@ -335,10 +324,7 @@ class Node:
           self.dir_msg_count[DOWN] = 0; 
 
         # Start next cycle after computation is complete
-        if random_processing:
-          computation_delay = rand_time();
-        else:
-          computation_delay = mean_time;
+        computation_delay = latency;
         self.add_event( Event(START_LEFT_RIGHT + (self.cycle%2), time + computation_delay, SRC_SELF) );
 
 # Create the network
@@ -347,8 +333,7 @@ for i in range(Nx):
   net = [];
 
   for j in range(Ny):
-    net.append( Node(startup_delay = rand_time() if random_processing else mean_time, \
-                    ant_x = i, ant_y = j) );
+    net.append( Node(startup_delay = 0, ant_x = i, ant_y = j) );
 
   network.append(net);
 
@@ -398,19 +383,17 @@ while(not done):
         global_next_event = node.next_event_time();
 
   # Update the plot of the array
-  if graphics and (time - last_plot_time) > 100e-6:
+  if graphics and (time - last_plot_time) > 50e-6:
     cycle_data = [[node.cycle for node in row ] for row in network]
     mat_data = np.array(cycle_data)
-    plt.pcolor(mat_data.T, norm=normalizer)
+    plt.pcolor(mat_data, norm=normalizer)
     plt.draw()
     last_plot_time = time;
-
-theoretical_time = NUM_CYCLES * mean_time + NUM_CYCLES * (bw_delay + latency) * (Nx-1);
-print 'Simulation finished at time:     ', time, 'seconds.';
-print 'Theoretical completion time is:  ', theoretical_time, 'seconds';
 
 if graphics:
   plt.ioff()
   plt.show()
 
+print 'Simulation finished at time:     ', time, 'seconds.';
+print 'Theoretical completion time is:  ', NUM_CYCLES * (bw_delay + latency) * (Nx-1), 'seconds';
 
