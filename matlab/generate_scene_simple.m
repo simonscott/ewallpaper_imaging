@@ -10,6 +10,6 @@ targets_x = [0.5, -0.5, 0];
 targets_y = [0.5, -0.5, 0];
 targets_z = [1.5, 1.5, 1.8];
 
-targets_refl = [1, 1, 2];
+targets_refl = [1, 1, 10];
 
 end

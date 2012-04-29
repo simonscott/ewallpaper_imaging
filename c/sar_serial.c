@@ -101,8 +101,8 @@ int main(int argc, char** argv) {
   tick();
   complex* s = (complex*)safe_malloc(Nx * Ny * Nf * sizeof(complex),
                          "Failed to allocate memory for radar data.");
-  read_original_data(s, "scene_4.dat");
-  //read_data(s, "scene_4.dat");
+  //read_original_data(s, "scene_4.dat");
+  read_data(s, "head_scene.dat");
   tock();
 
   // Perform a single 2D FFT for each frequency
@@ -222,7 +222,7 @@ int main(int argc, char** argv) {
   // Pass the computed matrix and a output filename to write_data()
   printf("Writing data ...\n");
   tick();
-  write_data(s, "scene_4.out");
+  write_data(s, "head_scene.out");
   tock();
   printf("Done.\n");
 
