@@ -45,8 +45,8 @@ SRC_DOWN          = 3;
 SRC_SELF          = 4;
 
 # Network parameters
-Nx = 32;
-Ny = 32;
+Nx = 128;
+Ny = 128;
 Nf = 256;
 pkt_size = Nf * 2 * 4;  # in bytes
 link_speed = 1e9;       # bits per second
