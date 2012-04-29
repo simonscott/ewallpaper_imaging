@@ -1,6 +1,11 @@
 from heapq import *
-import numpy as np
-import matplotlib.pyplot as plt
+
+graphics = 1;
+
+if graphics:
+  import numpy as np
+  import matplotlib.pyplot as plt
+  import matplotlib.colors as colors
 
 # Constant definitions
 EMPTY = 0;
@@ -45,8 +50,8 @@ SRC_DOWN          = 3;
 SRC_SELF          = 4;
 
 # Network parameters
-Nx = 128;
-Ny = 128;
+Nx = 32;
+Ny = 32;
 Nf = 256;
 pkt_size = Nf * 2 * 4;  # in bytes
 link_speed = 1e9;       # bits per second
@@ -333,15 +338,18 @@ for i in range(Nx):
   network.append(net);
 
 time = 0;
+last_plot_time = 0;
 global_next_event = 0;
 done = FALSE;
 
 # Setup the graphics simulation
-#plt.ion()
-#cycle_data = [[node.cycle for node in row ] for row in network]
-#mat_data = np.array(cycle_data)
-#plt.pcolor(mat_data)
-#plt.draw()
+if graphics:
+  plt.ion()
+  normalizer = colors.Normalize(vmin=0, vmax=NUM_CYCLES, clip=False);
+  cycle_data = [[node.cycle for node in row ] for row in network]
+  mat_data = np.array(cycle_data)
+  plt.pcolor(mat_data, norm=normalizer)
+  plt.draw()
 
 # Step through time until simulation finished
 while(not done):
@@ -375,13 +383,16 @@ while(not done):
         global_next_event = node.next_event_time();
 
   # Update the plot of the array
-  #cycle_data = [[node.cycle for node in row ] for row in network]
-  #mat_data = np.array(cycle_data)
-  #plt.pcolor(mat_data)
-  #plt.draw()
+  if graphics and (time - last_plot_time) > 50e-6:
+    cycle_data = [[node.cycle for node in row ] for row in network]
+    mat_data = np.array(cycle_data)
+    plt.pcolor(mat_data, norm=normalizer)
+    plt.draw()
+    last_plot_time = time;
 
-#plt.ioff()
-#plt.show()
+if graphics:
+  plt.ioff()
+  plt.show()
 
 print 'Simulation finished at time:     ', time, 'seconds.';
 print 'Theoretical completion time is:  ', NUM_CYCLES * (bw_delay + latency) * (Nx-1), 'seconds';
