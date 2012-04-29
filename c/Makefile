@@ -4,7 +4,7 @@ CFLAGS = -O3 -c99
 #CFLAGS = -g
 LIBS = -lm
 
-TARGETS = sar_serial sar_mpi
+TARGETS = sar_serial sar_mpi new_mpi
 
 all: $(TARGETS)
 
@@ -12,6 +12,8 @@ sar_serial: sar.o sar_serial.o
 	$(CC) -o $@ sar.o sar_serial.o $(LIBS)
 sar_mpi: sar.o sar_mpi.o virtual_network.o
 	$(MPCC) -o $@ -lpthread $(LIBS) $(MPILIBS) -o $@ sar.o sar_mpi.o virtual_network.o
+new_mpi: virtual_cpu.o mpi_network.o
+	$(MPCC) -o $@ -lpthread $(LIBS) $(MPILIBS) virtual_cpu.o mpi_network.o
 
 sar_serial.o: sar_serial.c sar.c sar.h
 	$(CC) -c $(CFLAGS) sar_serial.c
@@ -21,6 +23,11 @@ sar.o: sar.c sar.h
 	$(CC) -c $(CFLAGS) sar.c
 virtual_network.o: virtual_network.c virtual_network.h
 	$(CC) -c $(CFLAGS) -lpthread virtual_network.c
+
+virtual_cpu.o: virtual_cpu.c virtual_cpu.h
+	$(CC) -c $(CFLAGS) -lpthread virtual_cpu.c
+mpi_network.o: mpi_network.c virtual_cpu.h
+	$(MPCC) -c $(CFLAGS) mpi_network.c
 
 clean:
 	rm -f *.o $(TARGETS)

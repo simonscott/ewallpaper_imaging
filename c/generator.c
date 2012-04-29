@@ -95,7 +95,7 @@ void main(){
   }
 
   int fi;
-  #pragma omp parallel shared(scene, data, Nx, Ny, Mx, My, Mz) private(fi)
+  #pragma omp parallel num_threads(24) shared(scene, data, Nx, Ny, Mx, My, Mz) private(fi)
   {
     #pragma omp for
     for(fi=0; fi<Nf; fi++){

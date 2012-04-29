@@ -2,13 +2,16 @@
 #include <stdio.h>
 #include <mpi.h>
 #include <pthread.h>
+#include <string.h>
+#include <math.h>
 #include "virtual_cpu.h"
 
 // MPI Network
-int proc_x, proc_y, n_proc;
+int proc_x, proc_y;
 int nx_proc, ny_proc;
 
 // Network Parameters
+int num_x, num_y;
 int nx_cpu, ny_cpu;
 cpu* cpus;
 
@@ -16,15 +19,20 @@ cpu* cpus;
 //============================ Utilities =========================================
 //================================================================================
 
-void to_local_coords(int* x, int* y){
-  x[0] %= nx_proc;
-  y[0] %= ny_proc;
-}
-
 int is_local(int x, int y){
   return
     x >= proc_x * nx_cpu && x < (proc_x+1)*nx_cpu &&
     y >= proc_y * ny_cpu && y < (proc_y+1)*ny_cpu;
+}
+
+void to_local_coords(int* x, int* y){
+  if(!is_local(*x, *y)){
+    printf("CPU %d,%d is not local to node %d,%d.\n", *x, *y, proc_x, proc_y);
+    exit(-1);
+  }
+  
+  x[0] %= nx_cpu;
+  y[0] %= ny_cpu;
 }
 
 int get_rank(int proc_x, int proc_y){
@@ -68,6 +76,10 @@ void wait_for_network(){
 //================================================================================
 //=========================== MPI Thread =========================================
 //================================================================================
+
+//--------------------------------------------------------------------------------
+//--------------------------- Magic Constants ------------------------------------
+const int ack_tag = 0x4FFFF;
 
 //--------------------------------------------------------------------------------
 //--------------------------- Status Bits ----------------------------------------
@@ -122,7 +134,7 @@ void init_queue(queue* q, int capacity, int message_size){
   q->capacity = capacity;
 }
 
-void add_to_queue(queue* q, message msg, char* msg_buffer){
+void add_to_queue(queue* q, message msg, void* msg_buffer){
   //Check for space
   if(q->size == q->capacity){
     printf("Queue is full.\n");
@@ -152,6 +164,7 @@ void pop_queue(queue* q){
   //Shift message buffers down
   memmove(q->buffer, q->buffer + msg.size,
           q->buffer_top - (q->buffer + msg.size));
+  q->buffer_top -= msg.size;
   //Shift messages down
   for(int i=0; i<q->size-1; i++)
     q->items[i] = q->items[i+1];
@@ -160,24 +173,36 @@ void pop_queue(queue* q){
 
 //--------------------------------------------------------------------------------
 //---------------------------- Send and Receive Queues ---------------------------
+void dump_queue_contents(queue* q){
+  char msg[1000];
+  char* msg_top = msg;
+  for(int i=0; i<q->size; i++){
+    int* temp = (int*)q->buffer;
+    message msg = peek_queue(q);
+    msg_top += sprintf(msg_top, "%d: [%d,%d] from (%d,%d)\n", i, temp[0], temp[1], msg.x, msg.y);
+  }
+  printf("%s", msg);
+}
 
 queue* send_queue;
 queue* receive_queue;
 
 void init_network_queues(){
-  int queue_size = 10;
+  int queue_size = 128;
   int msg_size = 10 * sizeof(int);
+  send_queue = (queue*)malloc(sizeof(queue));
+  receive_queue = (queue*)malloc(sizeof(queue));
   init_queue(send_queue, queue_size, msg_size);
   init_queue(receive_queue, queue_size, msg_size);
 }
 
-void add_to_receive_queue(message msg, char* msg_buffer){
+void add_to_receive_queue(message msg, void* msg_buffer){
   pthread_mutex_lock(&network_lock);
   add_to_queue(receive_queue, msg, msg_buffer);
   pthread_mutex_unlock(&network_lock);
 }
 
-void add_to_send_queue(message msg, char* msg_buffer){
+void add_to_send_queue(message msg, void* msg_buffer){
   pthread_mutex_lock(&network_lock);
   add_to_queue(send_queue, msg, msg_buffer);
   pthread_mutex_unlock(&network_lock);
@@ -216,7 +241,7 @@ void process_receive_queue(){
       break;
 
     // Send port the message, and remove from queue
-    send_port(port, receive_queue, msg.size);
+    send_port(port, receive_queue->buffer, msg.size);
     pop_receive_queue();
 
     // Send acknowledgement message (tag = -1)
@@ -226,16 +251,19 @@ void process_receive_queue(){
     step_in_dir(opposite_dir(msg.dir), &dest_proc_x, &dest_proc_y);
     int dest_rank = get_rank(dest_proc_x, dest_proc_y);
     // Send 
-    MPI_Send(&msg, sizeof(message), MPI_BYTE, dest_rank, -1, MPI_COMM_WORLD);
+    MPI_Send(&msg, sizeof(message), MPI_BYTE, dest_rank, ack_tag, MPI_COMM_WORLD);
   }
 }
 
 //--------------------------------------------------------------------------------
 //-------------------------- MPI Thread ------------------------------------------
-void* mpi_thread(void* args){
+pthread_t mpi_receive_thread;
+volatile int mpi_thread_running;
+
+void init_mpi_thread(){
   // Initialize send_status
   init_status_bits();
-  
+
   // Initialize network signal and lock
   pthread_cond_init(&network_signal, NULL);
   pthread_mutex_init(&network_lock, NULL);
@@ -243,6 +271,11 @@ void* mpi_thread(void* args){
   // Initialize queues
   init_network_queues();
 
+  // Set to running
+  mpi_thread_running = 1;
+}
+
+void* mpi_thread(void* args){
   // Initialize Buffers and Status
   char* receive_buffer = (char*)malloc(10 * sizeof(int));
   char* send_buffer = (char*)malloc(10 * sizeof(int));
@@ -255,17 +288,21 @@ void* mpi_thread(void* args){
   MPI_Irecv(receive_buffer, 10 * sizeof(int), MPI_BYTE,
             MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &receive_request);
 
-  while(1){
+  while(mpi_thread_running){    
     // Check if receive complete
     int receive_buffer_free;
     MPI_Test(&receive_request, &receive_buffer_free, &receive_status);
     if(receive_buffer_free){
       // Acknowledgement message
-      if(receive_status.MPI_TAG == -1) {
+      if(receive_status.MPI_TAG == ack_tag) {
         message msg = *(message*)receive_buffer;
         int* status_bit = get_status_bit(msg.dir, msg.x, msg.y);
         status_bit[0] = 1;
         notify_network_listeners();
+        
+        //printf("Received Send Acknowledgement of message from %d,%d in direction %d\n",
+        //       msg.x, msg.y, msg.dir);
+        
       }
       // Normal message
       else{
@@ -278,8 +315,8 @@ void* mpi_thread(void* args){
       MPI_Irecv(receive_buffer, 10 * sizeof(int), MPI_BYTE,
                 MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &receive_request);
     }
-
-    // Check if there's anything to send
+    
+    // Check if there's anything to send    
     if(send_queue->size > 0){
       // Check if the send complete
       int send_buffer_free;
@@ -317,6 +354,15 @@ void* mpi_thread(void* args){
   }
 }
 
+void start_mpi_thread(){
+  pthread_create(&mpi_receive_thread, NULL, &mpi_thread, NULL);
+}
+
+void end_mpi_thread(){
+  mpi_thread_running = 0;
+  pthread_join(mpi_receive_thread, NULL);
+}
+
 //================================================================================
 //=================== Send and Receive ===========================================
 //================================================================================
@@ -333,7 +379,7 @@ void send_message(int x, int y, int direction, void* msg_buffer, int message_siz
     send_port(port, msg_buffer, message_size);
   }
   // Send across MPI channel
-  else {
+  else {    
     // Reset status bit
     int* status_bit = get_status_bit(direction, x, y);
     status_bit[0] = 0;
@@ -392,8 +438,8 @@ void start_network(void (*network_thread)(int, int)){
       // create thread arguments
       cpu_thread_args* args = (cpu_thread_args*)malloc(sizeof(cpu_thread_args));
       args->thread = network_thread;
-      args->x = x;
-      args->y = y;
+      args->x = x + proc_x * nx_cpu;
+      args->y = y + proc_y * ny_cpu;
       // start the thread
       start_cpu(&(cpus[x + y*nx_cpu]), &forwarding_thread, args);
     }
@@ -408,10 +454,7 @@ void end_network(){
 //============================ Simple Simulation =================================
 //================================================================================
 
-void simple_simulation(int x, int y){
-  printf("Processor (%d,%d)\n", x, y);
-
-  /*
+void simple_simulation(int x, int y){  
   //Initialize Buffers
   char* up_buffer = (char*)malloc(10*sizeof(int));
   char* down_buffer = (char*)malloc(10*sizeof(int));
@@ -425,14 +468,15 @@ void simple_simulation(int x, int y){
   int* msg = (int*)malloc(2*sizeof(int));
   msg[0] = x;
   msg[1] = y;
+  
   if(x > 0)
-    send_message(x, y, left, msg, 2*sizeof(int));
+    send_message(x, y, left, msg, 2*sizeof(int));  
+  
   //Receive message right
-  if(x < nx_cpu - 1){
+  if(x < num_x - 1){
     int* r_msg = (int*)receive_message(x, y, right);
-    printf("Processor (%d,%d) received [%d %d]\n", x, y, r_msg[0], r_msg[1]);
-  }
-  */
+    //printf("Processor (%d,%d) received [%d %d]\n", x, y, r_msg[0], r_msg[1]);
+  }  
 }
 
 //================================================================================
@@ -441,7 +485,7 @@ void simple_simulation(int x, int y){
 
 int main(int argc, char* argv[]){
   // Initialize MPI
-  int rank, thread_support;
+  int rank, thread_support, n_proc;
   MPI_Init_thread(&argc, &argv, MPI_THREAD_SERIALIZED, &thread_support);
   MPI_Comm_size(MPI_COMM_WORLD, &n_proc);
   MPI_Comm_rank(MPI_COMM_WORLD, &rank);
@@ -456,21 +500,21 @@ int main(int argc, char* argv[]){
   proc_y = rank / nx_proc;
   proc_x = rank % nx_proc;
   
-  // Create Network
-  init_network(128 / nx_proc, 128 / ny_proc);
-
+  // Create Network  
+  num_x = 128;
+  num_y = 128;
+  init_network(num_x / nx_proc, num_y / ny_proc);
+  
   // Start MPI Thread
-  pthread_t mpi_receive_thread;
-  pthread_create(&mpi_receive_thread, NULL, &mpi_thread, NULL);
+  init_mpi_thread();
+  start_mpi_thread();
 
-  // Start virtual network
+  // Start virtual network  
   start_network(&simple_simulation);
   end_network();
-
-  MPI_Barrier(MPI_COMM_WORLD);
-
+  
   // Stop MPI Thread
-  // Dummy Stuff
+  end_mpi_thread();
 
   // Cleanup MPI
   MPI_Finalize();
