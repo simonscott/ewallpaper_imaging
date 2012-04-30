@@ -21,7 +21,6 @@ void notify_port_listeners(cpu_port* port);
 void send_port(cpu_port* port, void* message, int message_size);
 char* receive_port(cpu_port* port);
 void free_port(cpu_port* port, void* buffer);
-cpu_port* get_port(cpu* processor, int direction);
 
 //================================================================================
 //=============================== CPU ============================================
@@ -45,6 +44,7 @@ const int right = 3;
 
 void init_cpu(cpu* processor);
 void start_cpu(cpu* processor, void* (*cpu_thread)(void*), void* args);
+cpu_port* get_port(cpu* processor, int direction);
 
 //================================================================================
 //============================ Directions ========================================
