@@ -53,16 +53,17 @@ SRC_DOWN          = 3;
 SRC_SELF          = 4;
 
 # Network parameters
-Nx = 128;
-Ny = 128;
+Nx = 64;
+Ny = 64;
 Nf = 256;
+N_subset = 16;
 pkt_size = Nf * 2 * 4;  # in bytes
 link_speed = 1e9;       # bits per second
 latency = 4e-9;
 bw_delay = (pkt_size * 8) / link_speed;
-bw_delay_1col = (pkt_size * 128 * 8) / link_speed;
-resend_delay = bw_delay / 2;
-NUM_CYCLES = 3;
+bw_delay_v_subset = (pkt_size * (128/N_subset) * 8) / link_speed;
+bw_delay_subset = (pkt_size * pow(128/N_subset, 2) * 8) / link_speed;
+NUM_CYCLES = 6;
 
 # Random processing parameters
 mean_time = 2e-6;
@@ -195,11 +196,12 @@ class Node:
 
     # Start event for L-R communication
     if next_event.event_type == START_LEFT_RIGHT:
-      if neighbors[LEFT] != -1:
+      if self.ant_x > (Nx-N_subset)/2:
         self.send_msg(LEFT, neighbors);
         self.state = INIT_SEND_LEFT;
-      else:
-        self.state = RECV_RIGHT;
+      else if self.ant_x < (Nx+N_subset)/2 - 1:
+        self.send_msg(RIGHT, neighbors);
+        self.state = INIT_SEND_RIGHT;
 
     # Start event for U-D communication
     elif next_event.event_type == START_UP_DOWN:
@@ -214,7 +216,14 @@ class Node:
     elif next_event.event_type == SEND_ACK_ARRIVE:
 
       if self.state == INIT_SEND_LEFT:
-          self.state = RECV_RIGHT;
+        if self.ant_x < (Nx+N_subset)/2 - 1:
+          self.send_msg(RIGHT, neighbors);
+          self.state = INIT_SEND_RIGHT;    
+        else:
+          self.state = RECV_LEFT;
+
+      elif self.state == INIT_SEND_RIGHT:
+        self.state = RECV_RIGHT;
 
       if self.state == INIT_SEND_UP:
         if neighbors[DOWN] != -1:
@@ -227,13 +236,22 @@ class Node:
         self.state = RECV_DOWN;
 
       elif self.state == SEND_LEFT:
-          self.state = RECV_RIGHT;
+        if self.cycle == 0:
+          if self.ant_x < (Nx+Nsubset)/2 and self.dir_msg_count[LEFT] < self.ant_x:
+            self.state = RECV_LEFT;
+          else:
+            self.state = RECV_RIGHT;
+        else:
+          print "TODO";
 
       elif self.state == SEND_RIGHT:
-        if self.dir_msg_count[RIGHT] < (Nx-1 - self.ant_x):
-          self.state = RECV_RIGHT;
+        if self.cycle == 0:
+          if self.ant_x >= (Nx-Nsubset)/2 and self.dir_msg_count[LEFT] < (Nx-1 - self.ant_x):
+            self.state = RECV_RIGHT;
+          else:
+            self.state = RECV_LEFT;
         else:
-          self.state = RECV_LEFT;
+          print "TODO";
 
       elif self.state == SEND_UP:
         if self.dir_msg_count[UP] < self.ant_y:
@@ -269,6 +287,8 @@ class Node:
     # Event: tail of a data packet is received
     elif next_event.event_type == PKT_TAIL_ARRIVE:
       self.recv_complete[next_event.source] = TRUE;
+
+# HERE #
 
     # If we are blocked on a receive, check if message is fully received.
     for direction in range(4):

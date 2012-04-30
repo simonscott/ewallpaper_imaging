@@ -1,5 +1,5 @@
-function total_time = cpu_model(latency, bandwidth, f_add_cycles, f_multiply_cycles, ... 
-                                clock_speed, mem_cycles, Nx, Ny, Nf)
+function [total_time, comp_time, comm_time] = cpu_model(latency, bandwidth, ...
+        f_add_cycles, f_multiply_cycles, clock_speed, mem_cycles, Nx, Ny, Nf)
   
   function time = do_mem(num_complex)
     time = num_complex * 2 * mem_cycles / clock_speed;
@@ -64,61 +64,65 @@ function total_time = cpu_model(latency, bandwidth, f_add_cycles, f_multiply_cyc
 
   % Initialize Timer
   total_time = 0;
+  comp_time = 0;
+  comm_time = 0;
   
   % Step 1: send_row
-  total_time = total_time + send_line();
+  comm_time = comm_time + send_line();
   
   % Step 2: (Nx - 1) receive and forward
-  total_time = total_time + receive_and_forward(Nx-1, Nf);
+  comm_time = comm_time + receive_and_forward(Nx-1, Nf);
   
   % Step 3: (2x) 1D FFT of length Nx
-  total_time = total_time + 2*fft_time(Nx);
+  comp_time = comp_time + 2*fft_time(Nx);
   
   % Step 4: send_col
-  total_time = total_time + send_line();
+  comm_time = comm_time + send_line();
   
   % Step 5: (Ny - 1) receive and forward
-  total_time = total_time + receive_and_forward(Ny-1, Nf);
+  comm_time = comm_time + receive_and_forward(Ny-1, Nf);
   
   % Step 6: (2x) 1D FFT of length Ny
-  total_time = total_time + 2*fft_time(Ny);
+  comp_time = comp_time + 2*fft_time(Ny);
   
   % Step 7: send_row
-  total_time = total_time + send_line();
+  comm_time = comm_time + send_line();
   
   % Step 8: (Nx - 1) receive and forward
-  total_time = total_time + receive_and_forward(Nx-1, Nf);
+  comm_time = comm_time + receive_and_forward(Nx-1, Nf);
   
   % Step 9: phase operator
-  total_time = total_time + phase_operator();
+  comp_time = comp_time + phase_operator();
   
   % Step 10: linear interpolator
-  total_time = total_time + linear_interpolator();
+  comp_time = comp_time + linear_interpolator();
   
   % Step 11: 1D IFFT of length Nf
-  total_time = total_time + fft_time(Nf);
+  comp_time = comp_time + fft_time(Nf);
   
   % Step 12: send_col
-  total_time = total_time + send_line();
+  comm_time = comm_time + send_line();
   
   % Step 13: (Ny - 1) receive and forward
-  total_time = total_time + receive_and_forward(Ny-1, Nf);
+  comm_time = comm_time + receive_and_forward(Ny-1, Nf);
   
   % Step 14: (2x) IFFT of length Ny
-  total_time = total_time + fft_time(Ny);
+  comp_time = comp_time + fft_time(Ny);
   
   % Step 15: send_row
-  total_time = total_time + send_line();
+  comm_time = comm_time + send_line();
   
   % Step 16: (Nx - 1) receive and forward
-  total_time = total_time + receive_and_forward(Nx-1, Nf);
+  comm_time = comm_time + receive_and_forward(Nx-1, Nf);
   
   % Step 17: (2x) IFFT of length Nx
-  total_time = total_time + fft_time(Nx);
+  comp_time = comp_time + fft_time(Nx);
   
   % Step 18: send_col
-  total_time = total_time + send_line();
+  comm_time = comm_time + send_line();
   
   % Step 19: (Ny - 1) receive and forward
-  total_time = total_time + receive_and_forward(Ny-1, Nf);
+  comm_time = comm_time + receive_and_forward(Ny-1, Nf);
+  
+  total_time = comm_time + comp_time;
 end
