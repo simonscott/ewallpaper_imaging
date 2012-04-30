@@ -4,6 +4,11 @@
 #include <string.h>
 #include "virtual_cpu.h"
 
+const int up = 0;
+const int down = 1;
+const int left = 2;
+const int right = 3;
+
 void init_cpu_port(cpu_port* p){
   // Initialize Message Buffer & Status
   p->buffer = 0;

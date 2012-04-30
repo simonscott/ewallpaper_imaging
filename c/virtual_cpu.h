@@ -37,10 +37,10 @@ typedef struct {
 } cpu;
 
 // Directions
-const int up = 0;
-const int down = 1;
-const int left = 2;
-const int right = 3;
+extern const int up;
+extern const int down;
+extern const int left;
+extern const int right;
 
 void init_cpu(cpu* processor);
 void start_cpu(cpu* processor, void* (*cpu_thread)(void*), void* args);

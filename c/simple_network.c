@@ -1,17 +1,12 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include "virtual_cpu.h"
+#include "network.h"
 
 // Network Parameters
 int nx_cpu;
 int ny_cpu;
 cpu* cpus;
-
-// Directions
-const int up = 0;
-const int down = 1;
-const int left = 2;
-const int right = 3;
 
 //================================================================================
 //============= Network Initialization, Start, and End ===========================
@@ -146,39 +141,17 @@ void free_network_port(int x, int y, int direction, void* buffer){
 }
 
 //================================================================================
-//============================ Simple Simulation =================================
-//================================================================================
-
-void simple_simulation(int x, int y){
-  printf("Processor (%d,%d)\n", x, y);
-  //Initialize Buffers
-  char* up_buffer = (char*)malloc(10*sizeof(int));
-  char* down_buffer = (char*)malloc(10*sizeof(int));
-  char* left_buffer = (char*)malloc(10*sizeof(int));
-  char* right_buffer = (char*)malloc(10*sizeof(int));
-  free_network_port(x, y, up, up_buffer);
-  free_network_port(x, y, down, down_buffer);
-  free_network_port(x, y, left, left_buffer);
-  free_network_port(x, y, right, right_buffer);
-  //Send message left
-  int* msg = (int*)malloc(2*sizeof(int));
-  msg[0] = x;
-  msg[1] = y;
-  if(x > 0)
-    send_message(x, y, left, msg, 2*sizeof(int));
-  //Receive message right
-  if(x < nx_cpu - 1){
-    int* r_msg = (int*)receive_message(x, y, right);
-    printf("Processor (%d,%d) received [%d %d]\n", x, y, r_msg[0], r_msg[1]);
-  }
-}
-
-//================================================================================
 //=============================== Main Driver ====================================
 //================================================================================
 
+// Provided Simulation
+void get_simulation_size(int* num_x, int* num_y);
+void network_simulation(int x, int y);
+
 void main(){
-  init_network(10,10);
-  start_network(&simple_simulation);
+  int num_x, num_y;
+  get_simulation_size(&num_x, &num_y);
+  init_network(num_x,num_y);
+  start_network(&network_simulation);
   end_network();
 }

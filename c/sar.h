@@ -6,15 +6,15 @@
 #define pi M_PI
 
 //Antenna Physical Parameters
-#define Nx 128
-#define Ny 128
+#define Nx 4 //128
+#define Ny 4 //128
 #define Dx (0.012 * 128/Nx)
 #define Dy (0.012 * 128/Ny)
 
 //Antenna RF Parameters
 #define f0 10e9
 #define B 2e9
-#define Nf 256
+#define Nf 8 //256
 #define Df (B/Nf * 256/Nf)
 
 //Scene Parameters
