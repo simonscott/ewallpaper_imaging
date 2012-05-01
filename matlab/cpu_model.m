@@ -1,6 +1,6 @@
 function [total_time, comp_time, comm_time] = cpu_model(latency, bandwidth, ...
-        f_add_cycles, f_multiply_cycles, sqrt_cycles, sin_cycles, clock_speed, mem_cycles, Nx, Ny, Nf,
-      precompute_fft, precompute_phase_operator, precompute_interpolation)
+        f_add_cycles, f_multiply_cycles, sqrt_cycles, sin_cycles, clock_speed, mem_cycles, Nx, Ny, Nf, ...
+      precompute_fft, precompute_phase_operator, precompute_interpolator)
   
   function time = do_mem(num_complex)
     time = num_complex * 2 * mem_cycles / clock_speed;
@@ -42,9 +42,9 @@ function [total_time, comp_time, comm_time] = cpu_model(latency, bandwidth, ...
   end
 
   function time = slow_fft_time(N)
-    coeff_time = (f_mult_cycles + 2 * sin_cycles) / clock_speed;
+    coeff_time = (f_multiply_cycles + 2 * sin_cycles) / clock_speed;
     mem_time = 0.5 * N * log2(N) * (do_mem(4) + do_mem(2));
-    ops_time = N * log2(N) * (complex_add() + coeff_time * complex_multiply());
+    ops_time = N * log2(N) * (complex_add() + coeff_time + complex_multiply());
     time = mem_time + ops_time;    
   end
 
@@ -53,6 +53,7 @@ function [total_time, comp_time, comm_time] = cpu_model(latency, bandwidth, ...
       time = fast_fft_time(N);
     else
       time = slow_fft_time(N);
+    end
   end
 
   function time = fast_phase_operator()
@@ -75,6 +76,7 @@ function [total_time, comp_time, comm_time] = cpu_model(latency, bandwidth, ...
       time = fast_phase_operator();
     else
       time = slow_phase_operator();
+    end
   end
 
   function time = fast_linear_interpolator()
@@ -91,12 +93,12 @@ function [total_time, comp_time, comm_time] = cpu_model(latency, bandwidth, ...
   end
 
   function time = slow_linear_interpolator()
-    single_precompute_time = (3 * f_add_cycles + 2 * f_mult_cycles + sqrt_cycles) / clock_speed;
+    single_precompute_time = (3 * f_add_cycles + 2 * f_multiply_cycles + sqrt_cycles) / clock_speed;
     mem_time = do_mem(3);
     complex_scalar_time = 2 * f_multiply_cycles / clock_speed;
     single_ops_time = 4 * f_add_cycles / clock_speed + ...
                2 * complex_scalar_time + complex_add();    
-    time = Nf*(single_precompute_time + mem_time + single_tops_time);
+    time = Nf*(single_precompute_time + mem_time + single_ops_time);
   end
   
   function time = linear_interpolator()
@@ -104,6 +106,7 @@ function [total_time, comp_time, comm_time] = cpu_model(latency, bandwidth, ...
       time = fast_linear_interpolator();
     else
       time = slow_linear_interpolator();
+    end
   end
 
   % Initialize Timer
