@@ -1,5 +1,6 @@
 function [total_time, comp_time, comm_time] = cpu_model(latency, bandwidth, ...
-        f_add_cycles, f_multiply_cycles, clock_speed, mem_cycles, Nx, Ny, Nf)
+        f_add_cycles, f_multiply_cycles, sqrt_cycles, sin_cycles, clock_speed, mem_cycles, Nx, Ny, Nf,
+      precompute_fft, precompute_phase_operator, precompute_interpolation)
   
   function time = do_mem(num_complex)
     time = num_complex * 2 * mem_cycles / clock_speed;
@@ -31,7 +32,7 @@ function [total_time, comp_time, comm_time] = cpu_model(latency, bandwidth, ...
     time = (4 * f_multiply_cycles + 2 * f_add_cycles) / clock_speed;
   end
 
-  function time = fft_time(N)
+  function time = fast_fft_time(N)
     % For a single FFT of length N:
     % [M] : (1/2)*N*log(N)*(4 LOADS and 2 STORES)
     % [Ops] : 8*N*log(N) real floating point operations
@@ -40,7 +41,21 @@ function [total_time, comp_time, comm_time] = cpu_model(latency, bandwidth, ...
     time = mem_time + ops_time;
   end
 
-  function time = phase_operator()
+  function time = slow_fft_time(N)
+    coeff_time = (f_mult_cycles + 2 * sin_cycles) / clock_speed;
+    mem_time = 0.5 * N * log2(N) * (do_mem(4) + do_mem(2));
+    ops_time = N * log2(N) * (complex_add() + coeff_time * complex_multiply());
+    time = mem_time + ops_time;    
+  end
+
+  function time = fft_time(N)
+    if(precompute_fft)
+      time = fast_fft_time(N);
+    else
+      time = slow_fft_time(N);
+  end
+
+  function time = fast_phase_operator()
     % Precompute phase operator phi (Nf complex values)
     % [M] : 2*Nf LOADS and Nf STORES
     % [Ops] : Nf Complex Multiplies
@@ -49,7 +64,20 @@ function [total_time, comp_time, comm_time] = cpu_model(latency, bandwidth, ...
     time = mem_time + ops_time;
   end
 
-  function time = linear_interpolator()
+  function time = slow_phase_operator()
+    cycles = 3 * f_multiply_cycles + 2 * f_add_cycles + sqrt_cycles + 2 * sin_cycles;
+    single_time = cycles / clock_speed + complex_multiply() + 2*do_mem(Nf);
+    time = Nf * single_time;
+  end
+  
+  function time = phase_operator()
+    if(precompute_phase_operator)
+      time = fast_phase_operator();
+    else
+      time = slow_phase_operator();
+  end
+
+  function time = fast_linear_interpolator()
     % [M] : Nf times : 2 COMPLEX LOADS, 1 REAL LOAD, 1 COMPLEX STORE
     % [Ops] Nf times :
     % 1 floor, 1 ceil
@@ -57,9 +85,25 @@ function [total_time, comp_time, comm_time] = cpu_model(latency, bandwidth, ...
     % 2 complex.scalar multiplies, 1 complex add
     mem_time = Nf * do_mem(3.5);
     complex_scalar_time = 2 * f_multiply_cycles / clock_speed;
-    ops_time = 4 * f_add_cycles / clock_speed + ...
+    single_ops_time = 4 * f_add_cycles / clock_speed + ...
                2 * complex_scalar_time + complex_add();
-    time = ops_time + mem_time;
+    time = Nf*single_ops_time + mem_time;
+  end
+
+  function time = slow_linear_interpolator()
+    single_precompute_time = (3 * f_add_cycles + 2 * f_mult_cycles + sqrt_cycles) / clock_speed;
+    mem_time = do_mem(3);
+    complex_scalar_time = 2 * f_multiply_cycles / clock_speed;
+    single_ops_time = 4 * f_add_cycles / clock_speed + ...
+               2 * complex_scalar_time + complex_add();    
+    time = Nf*(single_precompute_time + mem_time + single_tops_time);
+  end
+  
+  function time = linear_interpolator()
+    if(precompute_interpolator)
+      time = fast_linear_interpolator();
+    else
+      time = slow_linear_interpolator();
   end
 
   % Initialize Timer

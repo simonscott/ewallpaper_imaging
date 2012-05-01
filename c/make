@@ -1,1 +1,10 @@
-gcc scene_generator.c -std=c99 -O3 -lpthread -lm -o generate
+gcc sar_serial.c sar.c -std=c99 -O3 -o sar
+#gcc -O3 virtual_network.c network_example.c -pedantic -Wall -std=c99 -lpthread -o virtual_network
+#gcc network.c -std=c99 -lpthread -o network
+#gcc virtual_network.c network_sar.c sar.c -std=c99 -lpthread -o network
+
+#gcc generator.c -std=c99 -O3 -o generate
+
+gcc scene_generator.c -std=c99 -O3 -lpthread -o generate
+
+#gcc simple_network.c virtual_cpu.c simple_simulation.c -std=c99 -o cpus
