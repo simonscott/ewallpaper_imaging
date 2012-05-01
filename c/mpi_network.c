@@ -5,6 +5,7 @@
 #include <string.h>
 #include <math.h>
 #include "virtual_cpu.h"
+#include "network.h"
 
 // MPI Network
 int proc_x, proc_y;
@@ -61,15 +62,17 @@ cpu* get_cpu(int x, int y){
 pthread_cond_t network_signal;
 pthread_mutex_t network_lock;
 
-void notify_network_listeners(){
+void notify_network_listeners(int* status_bit){
   pthread_mutex_lock(&network_lock);
+  status_bit[0] = 1;
   pthread_cond_broadcast(&network_signal);
   pthread_mutex_unlock(&network_lock);
 }
 
-void wait_for_network(){
+void wait_for_network(int* status_bit){
   pthread_mutex_lock(&network_lock);
-  pthread_cond_wait(&network_signal, &network_lock);
+  while(!status_bit[0])
+     pthread_cond_wait(&network_signal, &network_lock);
   pthread_mutex_unlock(&network_lock);
 }
 
@@ -142,11 +145,46 @@ void add_to_queue(queue* q, message msg, void* msg_buffer){
   }
 
   //Copy message into buffer
-  memcpy(q->buffer_top, msg_buffer, msg.size);
+  if(msg_buffer)
+    memcpy(q->buffer_top, msg_buffer, msg.size);
   q->buffer_top += msg.size;
   //Store message
   q->items[q->size] = msg;
   (q->size)++;
+}
+
+char* get_message_buffer(queue* q, int i){
+  //Check Bounds
+  if(i < 0 || i >= q->size){
+    printf("Queue index out of bounds %d\n", i);
+    exit(-1);
+  }
+
+  char* buffer_start = q->buffer;
+  for(int k=0; k<i; k++)
+    buffer_start += q->items[k].size;
+  return buffer_start;
+}
+
+void remove_from_queue(queue* q, int i){
+  //Check Bounds
+  if(i < 0 || i >= q->size){
+    printf("Queue index out of bounds %d\n", i);
+    exit(-1);
+  }
+
+  // Get message i
+  message msg = q->items[i];
+  // Compute msg buffer index
+  char* buffer_start = get_message_buffer(q, i);
+  // Move messages over
+  memmove(buffer_start, buffer_start + msg.size,
+          q->buffer_top - (buffer_start + msg.size));
+  q->buffer_top -= msg.size;
+  // Shift messages down
+  for(int k=i; k<q->size-1; k++)
+    q->items[k] = q->items[k+1];
+  (q->size)--;  
 }
 
 message peek_queue(queue* q){
@@ -159,37 +197,20 @@ message peek_queue(queue* q){
 }
 
 void pop_queue(queue* q){
-  //Get top message
-  message msg = peek_queue(q);
-  //Shift message buffers down
-  memmove(q->buffer, q->buffer + msg.size,
-          q->buffer_top - (q->buffer + msg.size));
-  q->buffer_top -= msg.size;
-  //Shift messages down
-  for(int i=0; i<q->size-1; i++)
-    q->items[i] = q->items[i+1];
-  (q->size)--;
+  remove_from_queue(q, 0);
 }
 
 //--------------------------------------------------------------------------------
 //---------------------------- Send and Receive Queues ---------------------------
-void dump_queue_contents(queue* q){
-  char msg[1000];
-  char* msg_top = msg;
-  for(int i=0; i<q->size; i++){
-    int* temp = (int*)q->buffer;
-    message msg = peek_queue(q);
-    msg_top += sprintf(msg_top, "%d: [%d,%d] from (%d,%d)\n", i, temp[0], temp[1], msg.x, msg.y);
-  }
-  printf("%s", msg);
-}
 
 queue* send_queue;
 queue* receive_queue;
 
 void init_network_queues(){
-  int queue_size = 128;
-  int msg_size = 10 * sizeof(int);
+  //Network size
+  int queue_size = 16 * 8;
+  int msg_size = 256 * 2 * sizeof(int);
+  
   send_queue = (queue*)malloc(sizeof(queue));
   receive_queue = (queue*)malloc(sizeof(queue));
   init_queue(send_queue, queue_size, msg_size);
@@ -220,10 +241,17 @@ void pop_receive_queue(){
   pthread_mutex_unlock(&network_lock);
 }
 
-void process_receive_queue(){
-  while(receive_queue->size > 0){
-    message msg = peek_queue(receive_queue);
+void remove_from_receive_queue(int i){
+  pthread_mutex_lock(&network_lock);
+  remove_from_queue(receive_queue, i);
+  pthread_mutex_unlock(&network_lock);  
+}
 
+void process_receive_queue(){
+  int index = 0;
+  while(index < receive_queue->size){
+    message msg = receive_queue->items[index];
+    
     // Compute receiving port
     cpu* receiving_cpu;
     if(msg.dir == up)
@@ -236,22 +264,20 @@ void process_receive_queue(){
       receiving_cpu = get_cpu(proc_x * nx_cpu, msg.y);
     cpu_port* port = get_port(receiving_cpu, opposite_dir(msg.dir));
 
-    // Break if port is not available
-    if(!port->space_available)
-      break;
+    // If port is not available then go to the next message
+    if(!port->space_available){
+      index++;
+    }
+    // Otherwise process the message
+    else{
+      // Send port message, and remove from queue
+      send_port(port, get_message_buffer(receive_queue, index), msg.size);
+      remove_from_receive_queue(index);
 
-    // Send port the message, and remove from queue
-    send_port(port, receive_queue->buffer, msg.size);
-    pop_receive_queue();
-
-    // Send acknowledgement message (tag = -1)
-    // Compute destination
-    int dest_proc_x = proc_x;
-    int dest_proc_y = proc_y;
-    step_in_dir(opposite_dir(msg.dir), &dest_proc_x, &dest_proc_y);
-    int dest_rank = get_rank(dest_proc_x, dest_proc_y);
-    // Send 
-    MPI_Send(&msg, sizeof(message), MPI_BYTE, dest_rank, ack_tag, MPI_COMM_WORLD);
+      // Send acknowledgement message
+      msg.size = 0;
+      add_to_send_queue(msg, NULL);
+    }
   }
 }
 
@@ -259,6 +285,9 @@ void process_receive_queue(){
 //-------------------------- MPI Thread ------------------------------------------
 pthread_t mpi_receive_thread;
 volatile int mpi_thread_running;
+int max_size;
+char* mpi_receive_buffer;
+char* mpi_send_buffer;
 
 void init_mpi_thread(){
   // Initialize send_status
@@ -273,46 +302,44 @@ void init_mpi_thread(){
 
   // Set to running
   mpi_thread_running = 1;
+
+  // Initialize Buffers
+  max_size = 1024 * sizeof(int);
+  mpi_receive_buffer = (char*)malloc(max_size);
+  mpi_send_buffer = (char*)malloc(max_size);
 }
 
 void* mpi_thread(void* args){
   // Initialize Buffers and Status
-  char* receive_buffer = (char*)malloc(10 * sizeof(int));
-  char* send_buffer = (char*)malloc(10 * sizeof(int));
   MPI_Request receive_request = NULL;
   MPI_Request send_request = NULL;
   MPI_Status receive_status;
   MPI_Status send_status;
 
   // Initial Receive
-  MPI_Irecv(receive_buffer, 10 * sizeof(int), MPI_BYTE,
+  MPI_Irecv(mpi_receive_buffer, max_size, MPI_BYTE,
             MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &receive_request);
 
-  while(mpi_thread_running){    
+  while(mpi_thread_running || send_queue->size > 0){    
     // Check if receive complete
     int receive_buffer_free;
     MPI_Test(&receive_request, &receive_buffer_free, &receive_status);
     if(receive_buffer_free){
       // Acknowledgement message
       if(receive_status.MPI_TAG == ack_tag) {
-        message msg = *(message*)receive_buffer;
+        message msg = *(message*)mpi_receive_buffer;
         int* status_bit = get_status_bit(msg.dir, msg.x, msg.y);
-        status_bit[0] = 1;
-        notify_network_listeners();
-        
-        //printf("Received Send Acknowledgement of message from %d,%d in direction %d\n",
-        //       msg.x, msg.y, msg.dir);
-        
+        notify_network_listeners(status_bit);                
       }
       // Normal message
       else{
         message msg;
         MPI_Get_count(&receive_status, MPI_BYTE, &(msg.size));
         unpack_tag(receive_status.MPI_TAG, &(msg.x), &(msg.y), &(msg.dir));
-        add_to_receive_queue(msg, receive_buffer);
+        add_to_receive_queue(msg, mpi_receive_buffer);
       }
       // Receive again
-      MPI_Irecv(receive_buffer, 10 * sizeof(int), MPI_BYTE,
+      MPI_Irecv(mpi_receive_buffer, max_size, MPI_BYTE,
                 MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &receive_request);
     }
     
@@ -330,20 +357,35 @@ void* mpi_thread(void* args){
         // Get first message in queue
         message msg = peek_queue(send_queue);
 
-        // Compute destination rank
-        int dest_proc_x = proc_x;
-        int dest_proc_y = proc_y;
-        step_in_dir(msg.dir, &dest_proc_x, &dest_proc_y);
-        int dest_rank = get_rank(dest_proc_x, dest_proc_y);
+        // If Acknowledgement message (size == 0)
+        if(msg.size == 0){
+          // Compute destination rank
+          int dest_proc_x = proc_x;
+          int dest_proc_y = proc_y;
+          step_in_dir(opposite_dir(msg.dir), &dest_proc_x, &dest_proc_y);
+          int dest_rank = get_rank(dest_proc_x, dest_proc_y);
 
-        // Compute message tag
-        int dest_tag = pack_tag(msg.x, msg.y, msg.dir);
+          memcpy(mpi_send_buffer, send_queue->items, sizeof(message));
+          MPI_Isend(mpi_send_buffer, sizeof(message), MPI_BYTE, dest_rank, ack_tag,
+                    MPI_COMM_WORLD, &send_request);
+        }
+        // Normal Message
+        else {
+          // Compute destination rank
+          int dest_proc_x = proc_x;
+          int dest_proc_y = proc_y;
+          step_in_dir(msg.dir, &dest_proc_x, &dest_proc_y);
+          int dest_rank = get_rank(dest_proc_x, dest_proc_y);
+        
+          // Compute message tag
+          int dest_tag = pack_tag(msg.x, msg.y, msg.dir);
 
-        // Copy message into buffer and send
-        memcpy(send_buffer, send_queue->buffer, msg.size);
-        MPI_Isend(send_buffer, msg.size, MPI_BYTE, dest_rank, dest_tag,
-                  MPI_COMM_WORLD, &send_request);
-
+          // Copy message into buffer and send
+          memcpy(mpi_send_buffer, send_queue->buffer, msg.size);
+          MPI_Isend(mpi_send_buffer, msg.size, MPI_BYTE, dest_rank, dest_tag,
+                    MPI_COMM_WORLD, &send_request);
+        }
+        
         // Pop the message from queue now that it is sent.
         pop_send_queue();
       }
@@ -386,9 +428,10 @@ void send_message(int x, int y, int direction, void* msg_buffer, int message_siz
     // Add to send queue
     message msg = {x, y, direction, message_size};
     add_to_send_queue(msg, msg_buffer);
-    // Wait for acknowledgement
-    while(!status_bit[0])
-      wait_for_network();    
+    int temp_x = x;
+    int temp_y = y;
+    step_in_dir(direction, &temp_x, &temp_y);
+    wait_for_network(status_bit);
   }
 }
 
@@ -451,37 +494,14 @@ void end_network(){
 }
 
 //================================================================================
-//============================ Simple Simulation =================================
-//================================================================================
-
-void simple_simulation(int x, int y){  
-  //Initialize Buffers
-  char* up_buffer = (char*)malloc(10*sizeof(int));
-  char* down_buffer = (char*)malloc(10*sizeof(int));
-  char* left_buffer = (char*)malloc(10*sizeof(int));
-  char* right_buffer = (char*)malloc(10*sizeof(int));
-  free_network_port(x, y, up, up_buffer);
-  free_network_port(x, y, down, down_buffer);
-  free_network_port(x, y, left, left_buffer);
-  free_network_port(x, y, right, right_buffer);
-  //Send message left
-  int* msg = (int*)malloc(2*sizeof(int));
-  msg[0] = x;
-  msg[1] = y;
-  
-  if(x > 0)
-    send_message(x, y, left, msg, 2*sizeof(int));  
-  
-  //Receive message right
-  if(x < num_x - 1){
-    int* r_msg = (int*)receive_message(x, y, right);
-    //printf("Processor (%d,%d) received [%d %d]\n", x, y, r_msg[0], r_msg[1]);
-  }  
-}
-
-//================================================================================
 //=============================== Main Driver ====================================
 //================================================================================
+
+// Provided Simulation
+void get_simulation_size(int* num_x, int* num_y);
+void network_simulation(int x, int y);
+void initialize_simulation();
+void finalize_simulation();
 
 int main(int argc, char* argv[]){
   // Initialize MPI
@@ -500,21 +520,28 @@ int main(int argc, char* argv[]){
   proc_y = rank / nx_proc;
   proc_x = rank % nx_proc;
   
-  // Create Network  
-  num_x = 128;
-  num_y = 128;
+  // Create Network
+  get_simulation_size(&num_x, &num_y);
   init_network(num_x / nx_proc, num_y / ny_proc);
+
+  // Initialize Simulation
+  initialize_simulation();
+  MPI_Barrier(MPI_COMM_WORLD);
   
   // Start MPI Thread
   init_mpi_thread();
   start_mpi_thread();
 
   // Start virtual network  
-  start_network(&simple_simulation);
+  start_network(&network_simulation);
   end_network();
   
   // Stop MPI Thread
   end_mpi_thread();
+
+  // Finalize Simulation
+  MPI_Barrier(MPI_COMM_WORLD);
+  finalize_simulation();
 
   // Cleanup MPI
   MPI_Finalize();

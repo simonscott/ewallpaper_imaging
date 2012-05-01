@@ -2,7 +2,7 @@
 #PBS -l mppwidth=1
 #PBS -l mppnppn=1
 #PBS -l mppdepth=24
-#PBS -l walltime=18:30:00
+#PBS -l walltime=5:30:00
 #PBS -o openmp24.stdout
 #PBS -j oe
 #PBS -q regular
