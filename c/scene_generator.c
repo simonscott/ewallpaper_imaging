@@ -4,6 +4,8 @@
 #include <omp.h>
 #include <pthread.h>
 
+#define M_PI 3.14159265358979323846
+
 typedef struct {
   float real;
   float imag;
@@ -91,10 +93,11 @@ void* generate_thread(void* args){
 }
 
 void main(){
-  filename = "../matlab/sphere_scene.3d";
+  filename = "../matlab/small_head.3d";
   Mx = 64;
   My = 64;
   Mz = 113;
+  printf("Reading File %s\n", filename);
   scene = read_file(filename, Mx, My, Mz);
 
   Nx = 128;
@@ -115,7 +118,7 @@ void main(){
   }
 
   //Launch generator threads
-  int n_threads = 48;
+  int n_threads = 24;
   pthread_t threads[n_threads];
   int thread_args[n_threads][2];
 
@@ -128,12 +131,18 @@ void main(){
   }
 
   //Start threads
-  for(int i=0; i<n_threads; i++)
-    pthread_create(&threads[i], NULL, &generate_thread, &thread_args[i][0]);
+  printf("Starting Computation\n");
+  for(int i=0; i<n_threads; i++){
+    int failure = pthread_create(&threads[i], NULL, &generate_thread, &thread_args[i][0]);
+    if(failure){
+      printf("Failed to create thread\n");
+      exit(-1);
+    }
+  }
 
   //End threads
   for(int i=0; i<n_threads; i++)
     pthread_join(threads[i], NULL);
 
-  write_data("sphere_scene.dat", data);
+  write_data("small_head.dat", data);
 }
