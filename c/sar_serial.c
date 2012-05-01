@@ -86,6 +86,10 @@ void read_original_data(complex* data, char* filename){
 }
 
 int main(int argc, char** argv) {
+  // Parameters
+  char* input_file = "sphere_scene.dat"; //"head_scene.dat";
+  char* output_file = "sphere_scene.out"; //"head_scene.out";
+  
   //Precompute FFT coefficients
   Wkn_fft = precompute_fft_coefficients();
   Wkn_ifft = precompute_ifft_coefficients();
@@ -101,8 +105,7 @@ int main(int argc, char** argv) {
   tick();
   complex* s = (complex*)safe_malloc(Nx * Ny * Nf * sizeof(complex),
                          "Failed to allocate memory for radar data.");
-  //read_original_data(s, "scene_4.dat");
-  read_data(s, "head_scene.dat");
+  read_data(s, input_file);
   tock();
 
   // Perform a single 2D FFT for each frequency
@@ -222,7 +225,7 @@ int main(int argc, char** argv) {
   // Pass the computed matrix and a output filename to write_data()
   printf("Writing data ...\n");
   tick();
-  write_data(s, "head_scene.out");
+  write_data(s, output_file);
   tock();
   printf("Done.\n");
 
