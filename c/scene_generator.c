@@ -90,6 +90,7 @@ void* generate_thread(void* args){
     printf("Frequency %d\n", fi);
     generate_data(scene, data + fi*Nx*Ny, fi, Nx, Ny, Mx, My, Mz);
   }
+  return 0;
 }
 
 void main(){
