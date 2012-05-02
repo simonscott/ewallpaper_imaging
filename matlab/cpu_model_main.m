@@ -22,20 +22,20 @@ Nf = 256;
                        clock_speed, mem_cycles, Nx, Ny, Nf, ...
                        true, true, true);
                      
-% comm_times = [];
-% comp_times = [];
-% % for bandwidth = 0.1e9 : 0.1e9 : 3e9
+comm_times = [];
+comp_times = [];
+for bandwidth = 0.1e9 : 0.1e9 : 10e9
 % for Nx = 16:256
 %   Ny = Nx;
 %   Nf = 2*Nx;
-%   [total_time, comp_time, comm_time] = cpu_model(latency, bandwidth, ...
-%                        f_add_cycles, f_mult_cycles, ... 
-%                        sqrt_cycles, sin_cycles, ...
-%                        clock_speed, mem_cycles, Nx, Ny, Nf, ...
-%                        true, true, true);
-%   comm_times(end+1,1) = comm_time;
-%   comp_times(end+1,1) = comp_time;
-% end
+  [total_time, comp_time, comm_time] = cpu_model(latency, bandwidth, ...
+                       f_add_cycles, f_mult_cycles, ... 
+                       sqrt_cycles, sin_cycles, ...
+                       clock_speed, mem_cycles, Nx, Ny, Nf, ...
+                       true, true, true);
+  comm_times(end+1,1) = comm_time;
+  comp_times(end+1,1) = comp_time;
+end
 
 cpu_load = comp_time / total_time;
 frame_rate = (1/total_time);
