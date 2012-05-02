@@ -2,7 +2,7 @@ from heapq import *
 import random
 
 # Flags to selectively enable parts of code
-graphics = 0;
+graphics = 1;
 random_processing = 0;
 
 if graphics:
@@ -53,10 +53,10 @@ SRC_DOWN          = 3;
 SRC_SELF          = 4;
 
 # Network parameters
-Nx = 64;
-Ny = 64;
+Nx = 32;
+Ny = 32;
 Nf = 256;
-N_subset = 16;
+N_subset = 8;
 pkt_size = Nf * 2 * 4;  # in bytes
 link_speed = 1e9;       # bits per second
 latency = 4e-9;
@@ -70,6 +70,11 @@ mean_time = 2e-6;
 std_dev = 0.5e-6;
 min_time = 1e-6;
 max_time = 4e-6;
+
+# Calculate left and right (INCLUSIVE) margins of the subset
+sub_left = (Nx - N_subset)/2;
+sub_right = (Nx + N_subset)/2 - 1;
+
 
 # Define the event class
 # NOTE: the source is defined as the ORIGINAL source of the original message.
@@ -183,29 +188,31 @@ class Node:
 
   # Determines the bandwidth delay, based on the current cycle
   def get_bw_delay(self):
-    return bw_delay if self.cycle == 0 else bw_delay_1col;
+    if self.cycle == 0: return bw_delay;
+    elif self.cycle == 1: return bw_delay_v_subset;
+    else: return bw_delay_subset;
 
   # Fire the next event
   def fire(self, time, neighbors):
 
     next_event = heappop(self.event_queue);
 
-    if self.ant_x == 0 and self.ant_y == 2:
-      print 'Time:', time, ' Node [0][2]: state =', print_state(self.state), ' event =', print_event(next_event), \
+    if self.ant_x == 19 and self.ant_y == 16:
+      print 'Time:', time, ' Node [19][16]: state =', print_state(self.state), ' event =', print_event(next_event), \
             ' msg_count =', sum(self.dir_msg_count), ' cycle=', self.cycle, ' lcount=', self.dir_msg_count[LEFT], ' rcount=', self.dir_msg_count[RIGHT];
 
     # Start event for L-R communication
     if next_event.event_type == START_LEFT_RIGHT:
-      if self.ant_x > (Nx-N_subset)/2:
+      if self.ant_x > sub_left:
         self.send_msg(LEFT, neighbors);
         self.state = INIT_SEND_LEFT;
-      else if self.ant_x < (Nx+N_subset)/2 - 1:
+      else:
         self.send_msg(RIGHT, neighbors);
         self.state = INIT_SEND_RIGHT;
 
     # Start event for U-D communication
     elif next_event.event_type == START_UP_DOWN:
-      if neighbors[UP] != -1:
+      if self.ant_y > sub_left:
         self.send_msg(UP, neighbors);
         self.state = INIT_SEND_UP;
       else:
@@ -216,54 +223,82 @@ class Node:
     elif next_event.event_type == SEND_ACK_ARRIVE:
 
       if self.state == INIT_SEND_LEFT:
-        if self.ant_x < (Nx+N_subset)/2 - 1:
+        if self.ant_x < sub_right:
           self.send_msg(RIGHT, neighbors);
-          self.state = INIT_SEND_RIGHT;    
+          self.state = INIT_SEND_RIGHT;   
+        elif self.ant_x == sub_right:
+          self.state = RECV_LEFT; 
+        else:
+          self.state = RECV_RIGHT;
+
+      elif self.state == INIT_SEND_RIGHT:
+        if self.ant_x >= sub_left:
+          self.state = RECV_RIGHT;
         else:
           self.state = RECV_LEFT;
 
-      elif self.state == INIT_SEND_RIGHT:
-        self.state = RECV_RIGHT;
-
       if self.state == INIT_SEND_UP:
-        if neighbors[DOWN] != -1:
+        if self.ant_y < sub_right:
           self.send_msg(DOWN, neighbors);
           self.state = INIT_SEND_DOWN;    
+        elif self.ant_y == sub_right:
+          self.state = RECV_UP; 
         else:
-          self.state = RECV_UP;
+          self.state = RECV_DOWN;
 
       elif self.state == INIT_SEND_DOWN:
-        self.state = RECV_DOWN;
+        if self.ant_y >= sub_left:
+          self.state = RECV_DOWN;
+        else:
+          self.state = RECV_UP;
 
       elif self.state == SEND_LEFT:
         if self.cycle == 0:
-          if self.ant_x < (Nx+Nsubset)/2 and self.dir_msg_count[LEFT] < self.ant_x:
+          if self.ant_x <= sub_right and self.dir_msg_count[LEFT] < self.ant_x:
             self.state = RECV_LEFT;
           else:
             self.state = RECV_RIGHT;
         else:
-          print "TODO";
+          if self.dir_msg_count[LEFT] < self.ant_x - sub_left:
+            self.state = RECV_LEFT;
+          else:
+            self.state = RECV_RIGHT;
 
       elif self.state == SEND_RIGHT:
         if self.cycle == 0:
-          if self.ant_x >= (Nx-Nsubset)/2 and self.dir_msg_count[LEFT] < (Nx-1 - self.ant_x):
+          if self.ant_x >= sub_left and self.dir_msg_count[RIGHT] < (Nx-1 - self.ant_x):
             self.state = RECV_RIGHT;
           else:
             self.state = RECV_LEFT;
         else:
-          print "TODO";
+          if self.dir_msg_count[RIGHT] < sub_right - self.ant_x:
+            self.state = RECV_RIGHT;
+          else:
+            self.state = RECV_LEFT;
 
       elif self.state == SEND_UP:
-        if self.dir_msg_count[UP] < self.ant_y:
-          self.state = RECV_UP;
+        if self.cycle == 1:
+          if self.ant_y <= sub_right and self.dir_msg_count[UP] < self.ant_y:
+            self.state = RECV_UP;
+          else:
+            self.state = RECV_DOWN;
         else:
-          self.state = RECV_DOWN;
+          if self.dir_msg_count[UP] < self.ant_y - sub_left:
+            self.state = RECV_UP;
+          else:
+            self.state = RECV_DOWN;
 
       elif self.state == SEND_DOWN:
-        if self.dir_msg_count[DOWN] < (Ny-1 - self.ant_y):
-          self.state = RECV_DOWN;
+        if self.cycle == 1:
+          if self.ant_y >= sub_left and self.dir_msg_count[DOWN] < (Ny-1 - self.ant_y):
+            self.state = RECV_DOWN;
+          else:
+            self.state = RECV_UP;
         else:
-          self.state = RECV_UP;
+          if self.dir_msg_count[DOWN] < sub_right - self.ant_y:
+            self.state = RECV_DOWN;
+          else:
+            self.state = RECV_UP;
 
     # Event: SEND finishes, and so send buffer is now available
     elif next_event.event_type == SEND_COMPLETE:
@@ -288,25 +323,48 @@ class Node:
     elif next_event.event_type == PKT_TAIL_ARRIVE:
       self.recv_complete[next_event.source] = TRUE;
 
-# HERE #
-
     # If we are blocked on a receive, check if message is fully received.
     for direction in range(4):
 
       if self.state == (RECV_LEFT + direction) and self.recv_complete[direction]:
 
+        fwd = FALSE;
+        if direction == LEFT and self.ant_x < sub_right:
+          fwd = TRUE;
+        elif direction == RIGHT and self.ant_x > sub_left:
+          fwd = TRUE;
+        elif direction == UP and self.ant_y < sub_right:
+          fwd = TRUE;
+        elif direction == DOWN and self.ant_y > sub_left:
+          fwd = TRUE;
+
+        recv_opp_dir = FALSE;
+        if self.cycle <= 1:
+          if direction == LEFT and self.ant_x == sub_right and self.dir_msg_count[RIGHT] < (Nx-1 - self.ant_x):
+            recv_opp_dir = TRUE;
+          elif direction == RIGHT and self.ant_x == sub_left and self.dir_msg_count[LEFT] < (self.ant_x):
+            recv_opp_dir = TRUE;
+          elif direction == UP and self.ant_y == sub_right and self.dir_msg_count[DOWN] < (Ny-1 - self.ant_y):
+            recv_opp_dir = TRUE;
+          elif direction == DOWN and self.ant_y == sub_left and self.dir_msg_count[UP] < (self.ant_y):
+            recv_opp_dir = TRUE;
+
         # If we can receive the message
         # That is, If no neighbor on the opposite 'direction' side or
         # If space in the opposite send buffer
-        if neighbors[self.opp(direction)] == -1 or self.send_buf[self.opp(direction)] == EMPTY:
+        if not fwd or self.send_buf[self.opp(direction)] == EMPTY:
           self.recv_buf[direction] = EMPTY;
           self.recv_complete[direction] = FALSE;
           self.dir_msg_count[direction] += 1;
 
           # If we have a neighbor in the opposite direction, forward message on
-          if neighbors[self.opp(direction)] != -1:
+          if fwd:
             self.send_msg(self.opp(direction), neighbors);
             self.state = (SEND_LEFT + self.opp(direction));
+
+          #If on inner edge of boundary, must now listen in opposite direction
+          elif recv_opp_dir:
+            self.state = (RECV_LEFT + self.opp(direction));
 
           # If a receive was pending (because receive buffer was full), send an ACK and start receiving next msg
           if self.recv_pending[direction]: 
@@ -322,14 +380,35 @@ class Node:
           #print 'ERROR: cannot forward message on due to insufficient space in own send buffer', self.ant_x, self.ant_y, self.cycle;
 
     # If we have received all the messages, finish    
-    if ( (self.cycle == 0 and self.dir_msg_count[RIGHT] == (Nx-1 - self.ant_x)) or       \
-         (self.cycle >= 1 and self.dir_msg_count[UP] + self.dir_msg_count[DOWN] == (Ny - 1)) ) and \
-       self.send_count == self.send_complete_count:
+    num_msg_rcvd = self.dir_msg_count[LEFT] + self.dir_msg_count[RIGHT] if self.cycle%2==0 \
+                   else self.dir_msg_count[UP] + self.dir_msg_count[DOWN];
+    recv_done = FALSE;
+    #print 'Ant_x=', self.ant_x, 'Ant_y=', self.ant_y, 'num_recv_msgs=', num_msg_rcvd, 'cycle=', self.cycle
+    if self.cycle == 0:
+      if (self.ant_x < sub_left and num_msg_rcvd == self.ant_x) or \
+         (self.ant_x > sub_right and num_msg_rcvd == Nx-1 - self.ant_x) or \
+         (num_msg_rcvd == Nx-1):
+        recv_done = TRUE;
+    elif self.cycle == 1:
+      if (self.ant_y < sub_left and num_msg_rcvd == self.ant_y) or \
+         (self.ant_y > sub_right and num_msg_rcvd == Ny-1 - self.ant_y) or \
+         (num_msg_rcvd == Ny-1):
+        recv_done = TRUE;
+    else:
+      if (self.cycle%2 == 0 and self.dir_msg_count[LEFT] + self.dir_msg_count[RIGHT] == N_subset - 1) or \
+         (self.cycle%2 == 1 and self.dir_msg_count[UP] + self.dir_msg_count[DOWN] == N_subset - 1):
+        recv_done = TRUE;
+
+    if recv_done and self.send_count == self.send_complete_count:
 
       self.cycle += 1;
 
       # If we have completed all 3 cycles of communication
-      if self.cycle >= NUM_CYCLES or self.ant_x > 0:
+      if self.cycle == 1 and (self.ant_x < sub_left or self.ant_x > sub_right):
+        self.finished = TRUE;
+      elif self.cycle == 2 and (self.ant_y < sub_left or self.ant_y > sub_right):
+        self.finished = TRUE;
+      elif self.cycle >= NUM_CYCLES:
         self.finished = TRUE;
 
       # Else do some computation, and then move to next phase
@@ -337,7 +416,7 @@ class Node:
         # Reset counters
         self.send_count = 0;
         self.send_complete_count = 0;
-        if self.cycle == 1:
+        if self.cycle%2 == 1:
           self.dir_msg_count[LEFT] = 0;
           self.dir_msg_count[RIGHT] = 0; 
         else:
@@ -350,7 +429,11 @@ class Node:
         else:
           computation_delay = mean_time;
 
-        self.add_event( Event(START_UP_DOWN, time + computation_delay, SRC_SELF) );
+        if (self.cycle == 1 and self.ant_x <= sub_right and self.ant_x >= sub_left) or \
+           (self.cycle > 1 and self.ant_x <= sub_right and self.ant_x >= sub_left and \
+            self.ant_y <= sub_right and self.ant_y >= sub_left):
+
+          self.add_event( Event(START_LEFT_RIGHT + self.cycle%2, time + computation_delay, SRC_SELF) );
 
 # Create the network
 network = []
@@ -372,7 +455,7 @@ done = FALSE;
 if graphics:
   plt.ion()
   normalizer = colors.Normalize(vmin=0, vmax=NUM_CYCLES, clip=False);
-  cycle_data = [[node.cycle for node in row ] for row in network]
+  cycle_data = [[node.send_count for node in row ] for row in network]
   mat_data = np.array(cycle_data)
   plt.pcolor(mat_data, norm=normalizer)
   plt.draw()
@@ -405,6 +488,7 @@ while(not done):
 
       # If node not finished, make done FALSE
       if not node.finished:
+        if time > 0.1: print node.ant_x, node.ant_y, 'not finished';
         done = FALSE;
 
       # If the next_event_time is less than current global_next_event, update global_next_event
@@ -412,7 +496,7 @@ while(not done):
         global_next_event = node.next_event_time();
 
   # Update the plot of the array
-  if graphics and (time - last_plot_time) > 10e-3:
+  if graphics and (time - last_plot_time) > 1e-3:
     cycle_data = [[node.cycle for node in row ] for row in network]
     mat_data = np.array(cycle_data)
     plt.pcolor(mat_data.T, norm=normalizer)
@@ -420,7 +504,7 @@ while(not done):
     last_plot_time = time;
 
 theoretical_time = NUM_CYCLES * mean_time + (bw_delay + latency) * (Nx-1) + \
-                    (NUM_CYCLES-1) * (bw_delay_1col + latency) * (Ny-1);
+                    (NUM_CYCLES-1) * (bw_delay_subset + latency) * (Ny-1);
 print 'Simulation finished at time:     ', time, 'seconds.';
 print 'Theoretical completion time is:  ', theoretical_time, 'seconds';
 
