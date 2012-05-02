@@ -154,7 +154,7 @@ function [total_time, comp_time, comm_time] = cpu_model(latency, bandwidth, ...
   comm_time = comm_time + receive_and_forward(Ny-1, Nf);
   
   % Step 14: (2x) IFFT of length Ny
-  comp_time = comp_time + fft_time(Ny);
+  comp_time = comp_time + 2*fft_time(Ny);
   
   % Step 15: send_row
   comm_time = comm_time + send_line();
@@ -163,7 +163,7 @@ function [total_time, comp_time, comm_time] = cpu_model(latency, bandwidth, ...
   comm_time = comm_time + receive_and_forward(Nx-1, Nf);
   
   % Step 17: (2x) IFFT of length Nx
-  comp_time = comp_time + fft_time(Nx);
+  comp_time = comp_time + 2*fft_time(Nx);
   
   % Step 18: send_col
   comm_time = comm_time + send_line();

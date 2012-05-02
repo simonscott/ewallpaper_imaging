@@ -1,8 +1,8 @@
 from heapq import *
-import random
+import random, math
 
 # Flags to selectively enable parts of code
-graphics = 1;
+graphics = 0;
 random_processing = 0;
 
 if graphics:
@@ -53,23 +53,65 @@ SRC_DOWN          = 3;
 SRC_SELF          = 4;
 
 # Network parameters
-Nx = 32;
-Ny = 32;
+Nx = 128;
+Ny = 128;
 Nf = 256;
-N_subset = 8;
+N_subset = 16;
 pkt_size = Nf * 2 * 4;  # in bytes
 link_speed = 1e9;       # bits per second
-latency = 4e-9;
+latency = 15e-9;
 bw_delay = (pkt_size * 8) / link_speed;
-bw_delay_v_subset = (pkt_size * (128/N_subset) * 8) / link_speed;
-bw_delay_subset = (pkt_size * pow(128/N_subset, 2) * 8) / link_speed;
+bw_delay_v_subset = (pkt_size * (Nx/N_subset) * 8) / link_speed;
+bw_delay_subset = (pkt_size * pow(Nx/N_subset, 2) * 8) / link_speed;
 NUM_CYCLES = 6;
 
 # Random processing parameters
-mean_time = 2e-6;
-std_dev = 0.5e-6;
-min_time = 1e-6;
-max_time = 4e-6;
+std_dev_frac = 0.25;
+min_time_frac = 0.1;
+max_time_frac = 10;
+
+# Functions to calculate processing time
+f_add_cycles = 5;
+f_mult_cycles = 5;
+sqrt_cycles = 30; # ARM single precision square root
+sin_cycles = 31; # ARM System Developer's Guide
+clock_speed = 1e9;
+mem_cycles = 2;
+
+def do_mem(num_complex):
+  return num_complex * 2 * mem_cycles / 1e9;
+
+def complex_add():
+  return 2 * f_add_cycles / clock_speed;
+
+def complex_multiply():
+  return (4 * f_mult_cycles + 2 * f_add_cycles) / clock_speed;
+
+def fast_fft_time(N):
+  mem_time = 0.5 * N * math.log(N,2) * (do_mem(4) + do_mem(2));
+  ops_time = N * math.log(N,2) * (complex_add() + complex_multiply());
+  return mem_time + ops_time;
+
+def fast_phase_operator():
+  mem_time = do_mem(2*Nf) + do_mem(Nf);
+  ops_time = Nf * complex_multiply();
+  return mem_time + ops_time;
+
+def fast_linear_interpolator():
+  mem_time = Nf * do_mem(3.5);
+  complex_scalar_time = 2 * f_mult_cycles / clock_speed;
+  single_ops_time = 4 * f_add_cycles / clock_speed + 2 * complex_scalar_time + complex_add();
+  return Nf*single_ops_time + mem_time;
+
+
+# Processing times for BEGINNING of each stage
+proc_time_0 = 0;
+proc_time_1 = (Nx/N_subset)*2*fast_fft_time(Nx);
+proc_time_2 = (Nx/N_subset)*(Nx/N_subset)*2*fast_fft_time(Nx);
+proc_time_3 = (Nx/N_subset)*(Nx/N_subset)*(fast_phase_operator() + fast_linear_interpolator() + fast_fft_time(Nf));
+proc_time_4 =  (Nx/N_subset)*(Nx/N_subset)*2*fast_fft_time(Ny);
+proc_time_5 =  (Nx/N_subset)*(Nx/N_subset)*2*fast_fft_time(Nx);
+proc_time = [proc_time_0, proc_time_1, proc_time_2, proc_time_3, proc_time_4, proc_time_5];
 
 # Calculate left and right (INCLUSIVE) margins of the subset
 sub_left = (Nx - N_subset)/2;
@@ -197,8 +239,8 @@ class Node:
 
     next_event = heappop(self.event_queue);
 
-    if self.ant_x == 19 and self.ant_y == 16:
-      print 'Time:', time, ' Node [19][16]: state =', print_state(self.state), ' event =', print_event(next_event), \
+    if self.ant_x == 64 and self.ant_y == 64:
+      print 'Time:', time, ' Node [64][64]: state =', print_state(self.state), ' event =', print_event(next_event), \
             ' msg_count =', sum(self.dir_msg_count), ' cycle=', self.cycle, ' lcount=', self.dir_msg_count[LEFT], ' rcount=', self.dir_msg_count[RIGHT];
 
     # Start event for L-R communication
@@ -425,9 +467,9 @@ class Node:
 
         # Start next cycle after computation is complete
         if random_processing:
-          computation_delay = rand_time();
+          computation_delay = rand_time(self.cycle);
         else:
-          computation_delay = mean_time;
+          computation_delay = proc_time[self.cycle];
 
         if (self.cycle == 1 and self.ant_x <= sub_right and self.ant_x >= sub_left) or \
            (self.cycle > 1 and self.ant_x <= sub_right and self.ant_x >= sub_left and \
@@ -441,7 +483,7 @@ for i in range(Nx):
   net = [];
 
   for j in range(Ny):
-    net.append( Node(startup_delay = rand_time() if random_processing else mean_time, \
+    net.append( Node(startup_delay = rand_time(0) if random_processing else proc_time[0], \
                     ant_x = i, ant_y = j) );
 
   network.append(net);
@@ -488,7 +530,6 @@ while(not done):
 
       # If node not finished, make done FALSE
       if not node.finished:
-        if time > 0.1: print node.ant_x, node.ant_y, 'not finished';
         done = FALSE;
 
       # If the next_event_time is less than current global_next_event, update global_next_event
@@ -503,10 +544,12 @@ while(not done):
     plt.draw()
     last_plot_time = time;
 
-theoretical_time = NUM_CYCLES * mean_time + (bw_delay + latency) * (Nx-1) + \
-                    (NUM_CYCLES-1) * (bw_delay_subset + latency) * (Ny-1);
+theoretical_time = sum(proc_time) + (bw_delay + latency) * (Nx-1) + \
+                    (bw_delay_v_subset + latency) * (Ny-1) + \
+                    (NUM_CYCLES-2) * (bw_delay_subset + latency) * (Nx-1);
 print 'Simulation finished at time:     ', time, 'seconds.';
-print 'Theoretical completion time is:  ', theoretical_time, 'seconds';
+print 'Theoretical completion time is:  ', theoretical_time, 'seconds (INVALID)';
+print 'Computation time (modeled) is:   ', sum(proc_time), 'seconds';
 
 if graphics:
   plt.ioff()
