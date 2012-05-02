@@ -87,8 +87,8 @@ void read_original_data(complex* data, char* filename){
 
 int main(int argc, char** argv) {
   // Parameters
-  char* input_file = "sphere_scene.dat"; //"head_scene.dat";
-  char* output_file = "sphere_scene.out"; //"head_scene.out";
+  char* input_file = "small_head.dat"; //"head_scene.dat";
+  char* output_file = "small_head.out"; //"head_scene.out";
   
   //Precompute FFT coefficients
   Wkn_fft = precompute_fft_coefficients();
