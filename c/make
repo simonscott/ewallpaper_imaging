@@ -1,1 +1,0 @@
-cc scene_generator.c -c99 -O3 -lpthread -lm -o generate
