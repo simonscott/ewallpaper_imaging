@@ -2,12 +2,10 @@
 #PBS -l mppwidth=1
 #PBS -l mppnppn=1
 #PBS -l mppdepth=24
-#PBS -l walltime=18:30:00
+#PBS -l walltime=02:00:00
 #PBS -o openmp24.stdout
 #PBS -j oe
 #PBS -q regular
 
-setenv PBS_O_WORKDIR /global/u1/p/psli2/wallpaper/c
 cd $PBS_O_WORKDIR
-setenv OMP_NUM_THREADS 24
-aprun -d 24 -n 1 -N 1 ./sar_generate
+aprun -d 24 -n 1 -N 1 ./generate
