@@ -1,0 +1,11 @@
+The antennas record the reflected wavefield at position, z=0, for each frequency, w, s(x,y,z=0,w). To reconstruct the wavefield at depth z, we downwards continue the recorded wavefield by multiplying by an appropriate phase offset, and integrate over the signals received at each antenna.
+
+[Eq1]
+
+To perform the above operation efficiently, we can avoid the double integral by pre-transforming the recorded signal to the frequency domain. This also allows us to compute the wavefield at every depth z, using Stolt interpolation, and an inverse Fourier transform.
+
+[Eq2]
+
+where z0 is the minimum distance to the target. Thus the complete algorithm is
+
+[Eq3].
