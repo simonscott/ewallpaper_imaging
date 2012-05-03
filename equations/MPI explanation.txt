@@ -1,0 +1,13 @@
+MPI based functional simulator enables fast prototyping and debugging for eWallpaper applications.
+
+eWallpaper applications are written in SPMD (single-program multiple-data) style. One instance of the program is launched for each of the 128x128 processors. 
+
+Within a single node, each processor is simulated in its own thread, with blocking sends and receives implemented via mutexes. 
+
+Across MPI node boundaries, virtual channels are implemented via MPI_Isend and MPI_Irecv functions.
+
+The number of virtual processors per MPI node is adjustable and transparent to the simulated application. 
+
+For fast prototyping, all 128x128 processors may be simulated on a single node. 
+
+For computationally intensive applications, virtual processors can be distributed across many MPI nodes.
