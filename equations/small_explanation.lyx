@@ -70,11 +70,9 @@ s(x,y,z) & = & \int s(x,y,z,\omega)d\omega\\
 
 
 \begin_inset Formula 
-\begin{eqnarray*}
-S(k_{x},k_{y},z) & = & \int S(k_{x},k_{y},z=0,\omega)e^{-jk_{z}z}d\omega\\
- & = & \int S(k_{x},k_{y},z=0,k_{z})e^{-jk_{z}z}dk_{z}\\
- & = & \text{IFT}_{k_{z}}\{S(k_{x},k_{y},z=0,k_{z})e^{-jk_{z}z_{0}}\}
-\end{eqnarray*}
+\[
+S(k_{x},k_{y},z)=\int S(k_{x},k_{y},z=0,k_{z})e^{-jk_{z}z}dk_{z}=\text{IFT}_{k_{z}}\{S(k_{x},k_{y},z=0,k_{z})e^{-jk_{z}z_{0}}\}
+\]
 
 \end_inset
 
