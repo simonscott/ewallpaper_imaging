@@ -1,0 +1,36 @@
+[Slide 1]
+The eWallpaper is a wallpaper with thousands of low-power processors embedded inside. 
+
+Each processor has a single radio transceiver and antenna.
+
+We developed a radar algorithm that allows us to image the room using the radio transceivers.
+
+Each radio transmits a millimeter wave pulse, and records the reflected echoes from the objects in the room.
+
+The echoes are combined using our algorithm to form a 3d image.
+
+The algorithm is borrowed from the field of Synthetic Aperture Radar.
+
+However, there are a number of challenges against implementing SAR on the eWallpaper.
+
+- The echo data is distributed amongst 16000 processors rather than being on a single processor.
+  
+- The restrictive mesh topology makes moving data between the nodes difficult.
+
+- And there is only a small amount of local memory per node, on the order of kilobytes. 
+
+Thus no single node can store all the data.
+
+[Slide 2]
+
+We developed a distributed version of the SAR algorithm that overcomes these challenges. 
+
+To test the algorithm, we simulate the antenna response reflecting off an artificial scene, such as the sphere shown on the left.
+
+These responses were fed into our algorithm, which we ran on Hopper, and the resulting recovered image is shown below.
+
+The graphs on the right show the projected performance on the actual eWallpaper hardware. 
+
+For 128x128 antennas, our distributed algorithm runs 600 times faster than a naive serial implementation.
+
+At our proposed link bandwidth of 1 Gbps, the algorithm achieves a framerate of 75 frames per seconds, enabling low latency recognition of human gestures.
