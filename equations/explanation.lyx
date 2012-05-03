@@ -1,0 +1,159 @@
+#LyX 2.0 created this file. For more info see http://www.lyx.org/
+\lyxformat 413
+\begin_document
+\begin_header
+\textclass article
+\use_default_options true
+\maintain_unincluded_children false
+\language english
+\language_package default
+\inputencoding auto
+\fontencoding global
+\font_roman default
+\font_sans default
+\font_typewriter default
+\font_default_family default
+\use_non_tex_fonts false
+\font_sc false
+\font_osf false
+\font_sf_scale 100
+\font_tt_scale 100
+
+\graphics default
+\default_output_format default
+\output_sync 0
+\bibtex_command default
+\index_command default
+\paperfontsize default
+\use_hyperref false
+\papersize default
+\use_geometry false
+\use_amsmath 1
+\use_esint 1
+\use_mhchem 1
+\use_mathdots 1
+\cite_engine basic
+\use_bibtopic false
+\use_indices false
+\paperorientation portrait
+\suppress_date false
+\use_refstyle 1
+\index Index
+\shortcut idx
+\color #008000
+\end_index
+\secnumdepth 3
+\tocdepth 3
+\paragraph_separation indent
+\paragraph_indentation default
+\quotes_language english
+\papercolumns 1
+\papersides 1
+\paperpagestyle default
+\tracking_changes false
+\output_changes false
+\html_math_output 0
+\html_css_as_file 0
+\html_be_strict false
+\end_header
+
+\begin_body
+
+\begin_layout Standard
+The complete scene is described by the amplitude and phase offset of the
+ wavefield at each point, 
+\begin_inset Formula $s(x,y,z)$
+\end_inset
+
+.
+ The antenna records the wavefield at position 
+\begin_inset Formula $z=0$
+\end_inset
+
+, for each frequency 
+\begin_inset Formula $\omega$
+\end_inset
+
+, 
+\begin_inset Formula $s(x,y,z=0,\omega)$
+\end_inset
+
+.
+ To reconstruct the wavefield at depth, 
+\begin_inset Formula $z$
+\end_inset
+
+, we 
+\emph on
+downwards continue 
+\emph default
+the recorded wavefield by integrating over the signals received at each
+ antenna after multiplying by an appropriate phase offset.
+\begin_inset Formula 
+\begin{eqnarray*}
+s(x,y,z) & = & \int s(x,y,z,\omega)d\omega\\
+ & = & \int(\int\int s(x',y',z=0,\omega)e^{-j\frac{2\omega}{c}||x'-x,y'-y,z||}dx'dy')d\omega
+\end{eqnarray*}
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+To perform the above operation efficiently, we can avoid the double integral
+ by first pre-transforming the recorded signal to the frequency domain.
+ Let 
+\begin_inset Formula $S(k_{x},k_{y},z=0,\omega)=\text{FT}_{x,y}\{s(x,y,z=0,\omega)\}$
+\end_inset
+
+ be the frequency domain representation of the recorded signal, then
+\begin_inset Formula 
+\[
+S(k_{x},k_{y},z)=\int S(k_{x},k_{y},z=0,\omega)e^{-jk_{z}z}d\omega
+\]
+
+\end_inset
+
+where 
+\begin_inset Formula $k_{z}=\sqrt{(\frac{2\omega}{c})^{2}-k_{x}^{2}-k_{y}^{2}}$
+\end_inset
+
+.
+ By resampling 
+\begin_inset Formula $S(k_{x},k_{y},z=0,\omega)$
+\end_inset
+
+ along evenly spaced intervals of 
+\begin_inset Formula $k_{z}$
+\end_inset
+
+, the above operation can be transformed into an Inverse Fourier transform
+ and computed efficiently using an IFFT.
+ This step is known in the literature as Stolt interpolation.
+\begin_inset Formula 
+\begin{eqnarray*}
+S(k_{x},k_{y},z) & = & \int S(k_{x},k_{y},z=0,k_{z})e^{-jk_{z}z}dk_{z}\\
+ & = & \text{IFT}_{k_{z}}\{S(k_{x},k_{y},z=0,k_{z})e^{-jk_{z}z_{0}}\},
+\end{eqnarray*}
+
+\end_inset
+
+where 
+\begin_inset Formula $z_{0}$
+\end_inset
+
+ is the minimum distance to the target.
+ Thus the complete algorithm is
+\begin_inset Formula 
+\[
+s(x,y,z)=\text{IFT}_{k_{x},k_{y}}\{\text{IFT}_{k_{z}}\{\text{\text{Stolt}}\{\text{FT}_{x,y}\{s(x',y',z=0,\omega)\}\}e^{-jk_{z}z_{0}}\}\}.
+\]
+
+\end_inset
+
+
+\end_layout
+
+\end_body
+\end_document
