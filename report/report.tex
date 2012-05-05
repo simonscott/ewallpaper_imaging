@@ -1,0 +1,102 @@
+\documentstyle[twocolumn]{article}
+\pagestyle{empty}
+\setlength{\textwidth}{7in}
+\setlength{\textheight}{9.125in}
+\setlength{\columnsep}{0.5in}
+\setlength{\topmargin}{-0.8in}
+\setlength{\oddsidemargin}{-0.25in}
+\setlength{\parindent}{5 ex}
+
+\makeatletter
+\def\@normalsize{\@setsize\normalsize{12pt}\xpt\@xpt \abovedisplayskip 11pt
+plus2pt minus5pt\belowdisplayskip \abovedisplayskip \abovedisplayshortskip \z@
+plus3pt\belowdisplayshortskip 6pt plus3pt
+minus3pt\let\@listi\@listI}
+%the following line was changed
+\def\subsize{\@setsize\subsize{12pt}\xipt\@xipt}
+\def\section{\@startsection{section}{1}{\z@}{24pt plus 2 pt
+minus 2 pt} {12pt plus 2pt minus 2pt}{\large\bf}}
+\def\subsection{\@startsection {subsection}{2}{\z@}{12pt
+plus 2pt minus 2pt}{12pt plus 2pt minus 2pt}{\subsize\bf}}
+\makeatother
+
+\begin{document}
+\date{}
+\title{\Large\bf A Distributed Algorithm for 3D Radar Imaging}
+\author{\begin{tabular}[t]{c}
+Patrick S. Li, Simon Scott \\
+Electrical Engineering and Computer Science\\
+University of California, Berkeley
+\end{tabular}}
+\maketitle
+\thispagestyle{empty}
+\subsection*{\centering Abstract}
+\vspace*{-3mm}
+{\em
+eWallpaper is a smart wallpaper with embedded low-power processors and radio transceivers. An important application of the wallpaper is to use the radio transceivers to perform 3D imaging using synthetic aperture radar (SAR) techniques. The major obstacles to implementing these techniques on the wallpaper are the distribution of the data amongst the large number of processors, the restrictive 2D mesh topology and the limited local memory on each processor. Our major contribution is a distributed and memory efficient implementation of the 3D imaging algorithm that operates in realtime and achieves video framerates. A hardware simulator was built to allow rapid development and verification of eWallpaper applications. This simulator was parallelized using MPI and Pthreads, enabling fast simulation on a high-performance computing cluster. We developed a performance model and network traffic simulator to verify that our distributed algorithm meets the framerate and memory requirements when running on the actual eWallpaper hardware.
+}
+\section{Introduction}
+- describe eWallpaper
+- describe imaging application and motivation
+-- gesture recognition, assisted living, etc...
+- how do you do imaging? (3D RMA) [cite ...]
+- the 3 challenges
+
+\section{The 3D Range Migration Algorithm}
+- Three-Dimensional Millimeter-Wave Imaging for Concealed Weapon Detection
+- 3-D Radar Imaging Using Range Migration Techniques
+- SAR Data Focusing Using Seismic Migration Techniques
+
+\section{Implementation on a 2D Mesh Network}
+- Describe wallpaper architecture and limitations in detail.
+- Row and Column Transpose
+- Distributed Algorithm
+
+\section{High Performance Functional Simulator}
+- mesh network API
+
+\section{Simulated Imaging Results}
+
+\section{Investigation of Design Parameters}
+- communication patterns
+- bandwidth
+- array size (resolution)
+- amount of precomputation
+Observe:
+- framerate
+- cpu load
+- memory
+
+1. For this, you need a timing model. you need a traffic simulator.
+2. We investigate (vary bandwidth, vary comuication, vary ..)
+-- describe different communication patterns
+
+\section{Performance Results}
+3. Show the trends vs. parameters
+
+\section{Related Work}
+- Three-Dimensional Millimeter-Wave Imaging for Concealed Weapon Detection
+- 3-D Radar Imaging Using Range Migration Techniques
+- SAR Data Focusing Using Seismic Migration Techniques
+
+- concealed weapons
+- original SAR paper
+- near-field 3D SAR imaging
+- realtime through-wall imaging
+- FFT's on ring topologies
+
+\section{Conclusion}
+- Conclude.
+- Future Work.
+
+\subsection*{Acknowledgements}
+SWARM lab?
+Kurt?
+
+
+{\small
+\bibliographystyle{ieee}
+\bibliography{bib}
+}
+
+\end{document}

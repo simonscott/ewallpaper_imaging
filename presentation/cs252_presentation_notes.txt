@@ -32,93 +32,98 @@ On the order of 100KB.
 
 This means that we need to be careful to design the algorithm and the communication pattern as no single processor can store the entire dataset.
 
-[Slide 4] ℗
+[Slide 4] (P)
 
 Here's the basics of how the imaging works:
 
-A single point target sits at (x,y,z), the antenna sits on the plane z=0 at (x', y', 0).
+A single point target sits at (x,y,z), the antenna sits on the plane z=0 at point (x', y').
 
 The antenna will send out a continuous sin wave, and listen for the reflected sin wave from the target. 
 
 The radio transceiver will record the amplitude of the received sin wave, and the phase offset between the transmitted and received signal. 
 
-This process is repeated for a number of different frequencies (in our case we use 256), and for each antenna. 
+This process is repeated for 256 different frequencies and for each of the 128 x 128 antennas.
 
 Thus the input to the algorithm is 128x128x256 amplitudes and phase offsets.
+
+
 
 Formalizing everything:
 
 d is the distance to the target.
 
-[Slide 5] ℗
+[Slide 5] (P)
 
 The time it takes for the signal to hit the target and come back is 2d over the speed of light.
 
-[Slide 6] ℗
+[Slide 6] (P)
 
 In that time, the phase is delayed by omega * t, where omega is the angular frequency of the sin wave.
 
-[Slide 7] ℗
+[Slide 7] (P)
 
 The amplitude of the reflected sin wave is r.
 
-[Slide 8] ℗
+[Slide 8] (P)
 
 Thus, the recorded signal at the antenna can be represented as a single complex number, with magnitude r, and phase phi.
 
-[Slide 9] ℗
+[Slide 9] (P)
 
-Thus, the wavefield at antenna position x', y', z=0, with angular frequency omega, is given by this expression.
+Thus expanding everything out:
 
-This expression is the same as the previous one, just expanded out.
+The recorded wavefield at antenna position, x', y', z=0, for a transmitted sin wave with angular frequency omega, is given by this expression.
 
-So each antenna sends out a signal. The signal travels at speed c, reflects off the object, and arrives back at the antenna.
+So here's how I described the procedure so far:
+Each antenna emits a sin wave. The signal travels at speed c, reflects off the object, and arrives back at the antenna.
 
-Alternatively, we could imagine that the objects themselves emit sinusoidal signals, which travel at half the speed of light.
+[Slide 10] (P)
 
-[Slide 10] ℗
+Alternatively, an equivalent interpretation is to imagine that the objects themselves emit sinusoidal signals, which travel at half the speed of light, and are recorded at the antenna.
 
-With this interpretation, the scene just generates a wavefield. And our antenna samples the wavefield at plane z=0.
+With this interpretation, the scene just generates a wavefield. And our antenna samples the wavefield on the  plane z=0.
 
-[Slide 11] ℗
+[Slide 11] (P)
 
-Okay, so to find the wavefield at position (x,y,z), we propagate the recorded wavefield at the antenna back towards the source.
+We have recorded the wavefield at z=0, and we want to recover is the wavefield at point (x,y,z).
+
+To do this, we propagate the recorded wavefield at the antenna back towards the source.
 
 This can be achieved by simply swapping the sign of the phase delay term, which represents propagation backwards in time.
 
-Since the wavefield was sampled across the entire array of antennas, we need to integrate over the entire array to determine the wavefield at the source.
+Then we sum up the contribution of each antenna to find the wavefield at (x,y,z).
 
-[Slide 12] ℗
+[Slide 12] (P)
 
-[Point to second equation] This is the same as the previous equation for the wavefield at (x,y,z) for each frequency w.
-
-We can reconstruct the image by integrating the expression over all frequencies.
+After backwards propagation, we can reconstruct the image by integrating the expression over all frequencies.
 
 This is the entire algorithm in the time-domain. However the double integral makes computation extremely expensive. 
 
 With 128x128 antennas, it takes 2 and a half hours on a 24 node cluster to form the image using this algorithm.
 
-[Slide 13] ℗
+[Slide 13] (P)
 
 To make the computation tractable, we can avoid the double-integral by computing this expression in the frequency domain.
 
 S(kx,ky,z=0,w) is the Fourier transform of signal s.
 
-Backwards propagation becomes a simple multiplication in the frequency domain.
+In the frequency domain, backwards propagation becomes a simple multiplication.
 
-The image is reconstructed once again by integrating over all frequencies.
+The image is reconstructed once again by integrating over the backwards propagated field over all frequencies.
 
 And we recover the image in the 3 dimensional spatial domain using an inverse Fourier transform.
 
-[Slide 14] ℗
+[Slide 14] (P)
 
-One last trick to make things even faster is to notice that this last integration can be made to look like a Fourier transform by changing omega to kz using linear interpolation.
+One last trick to make things even faster is to notice that this last integration almost looks like an Inverse Fourier transform.
+
+If we change omega to kz using linear interpolation, we can compute the integral using an efficient Inverse FFT.
 
 This is called Stolt interpolation.
 
-[Slide 15] ℗
+[Slide 15] (P)
 
-Thus combining everything, the final algorithm is:
+Thus combining everything, here's the final algorithm:
 
 s(x',y',z=0,omega) is a 3d matrix of complex numbers with dimensions array width, array height, and the number of frequencies.
 
@@ -172,7 +177,7 @@ The final 3D inverse FFT is implemented using 3 separate 1D FFTs with interleavi
 
 [Slide 19] (P)
 
-To help us develop the imaging algorithm, we created a functional simulator for fast prototyping and debugging of applications for the eWallpaper. 
+To help us develop the imaging algorithm, we created a functional simulator for fast prototyping and debugging of eWallpaper applications. 
 
 Applications are written in Single Program Multiple Data style. 
 
@@ -209,7 +214,7 @@ Our distributed algorithm was tested on our functional simulator running on a 64
 
 We artificially generate the antenna responses given an input scene. 
 
-The left diagram shows the input scene of 3 points, each with varying reflectivities. 
+The left diagram shows an input scene consisting of 3 points, each with varying reflectivities. 
 
 The 3d image recovered by our algorithm is shown on the right.
 
