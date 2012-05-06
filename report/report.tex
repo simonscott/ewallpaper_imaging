@@ -1,5 +1,7 @@
 \documentclass[twocolumn]{article}
 \usepackage{amsmath}
+\usepackage{graphicx}
+
 \pagestyle{empty}
 \setlength{\textwidth}{7in}
 \setlength{\textheight}{9.125in}
@@ -148,15 +150,52 @@ Also talk about:
 
 \section{Implementation on a 2D Mesh Network}
 
-Here
+A single sheet of eWallpaper contains 16384 low-power Rocket processors, arranged in a 128 x 128 array. Since the wires between processors are printed using conductive inks, only nearest-neighbor connections can be formed. This results in a 2D mesh network of bi-directional links.
 
-- Describe wallpaper architecture and limitations in detail.
-  - 128 x 128
-  - mesh, as inked wires mean nearest neighbor comms only
-  - Describe RISC-V performance and architecture
-- Row and Column Transpose
-- Explain that this is near optimal, based on 2 cited papers.
-- Distributed Algorithm
+The Rocket processor is based on the RISC-V \cite{riscv} ISA. It has a 6-stage, in-order pipeline, running at 1GHz. It also has an additional floating-point unit, capable of approximately 200 MFlops/s. Each processor has a 64KB L1 cache and 100KB of on-chip main memory. There is therefore no DRAM and no off-processor memory in the eWallpaper.
+
+In order to implement the imaging algorithm described in Section 2 on the eWallpaper, two important operations need to be defined: the row-wise transpose and the column-wise transpose.
+
+\subsection{The Row-wise Transpose}
+
+Describe the row-wise transpose.
+
+\begin{figure}[!h]
+\centering
+\includegraphics*[width=0.5\textwidth, viewport = 10 10 620 150]{figures/row_wise_transpose.pdf}
+\caption{A 3x3 processor array, before and after the row-wise transpose}
+\label{row_wise_transpose}
+\end{figure}
+
+Explain that this is near optimal, based on 2 cited papers.
+
+\subsection{The Column-wise Transpose}
+
+Same as row-wise transpose, except that processors in same column communicate. After comm, processors in 1st row have 1st freq value, 2nd row have 2nd.
+
+\begin{figure}[!h]
+\centering
+\includegraphics*[width=0.5\textwidth, viewport = 10 10 620 150]{figures/column_wise_transpose.pdf}
+\caption{A 3x3 processor array, before and after the column-wise transpose}
+\label{column_wise_transpose}
+\end{figure}
+
+\subsection{The Distributed 3D Imaging Algorithm}
+
+The row and column transpose operations allow the image processing algorithm, as previously described by Patrick, to be expressed as a sequence of operations that run on each node.
+The exact same operations run on all the nodes concurrently.
+Yellow boxes represent computation operations.
+Gray boxes represent communication between the processors.
+The 2D FFT is computed as 2 1D FFTs each preceded by a row or column transpose. 
+After the 2D FFT, the processor is able to perform a backward propagation and Stolt interpolation on locally stored data.
+The final 3D inverse FFT is implemented using 3 separate 1D FFTs with interleaving row and column transposes.
+
+\begin{figure}[!h]
+\centering
+\includegraphics*[width=0.25\textwidth, viewport=170 125 420 700]{figures/algorithm.pdf}
+\caption{The Distributed 3D Range Migration Algorithm}
+\label{algorithm}
+\end{figure}
 
 \section{High Performance Functional Simulator}
 
