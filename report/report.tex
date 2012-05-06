@@ -67,6 +67,7 @@ The proposed design for a single sheet of eWallpaper consists of an array of 128
 Taking these limitations into account, we developed a distributed implementation of the 3D range migration algorithm that is both memory efficient and able to achieve video framerates.
 
 \section{The 3D Range Migration Algorithm}
+\label{algorithm-section}
 
 The algorithm we adapted for performing 3D range migration is identical to the one presented in [] for 3D imaging using millimeter waves. The input to the algorithm is a 3D array of amplitudes and phase offsets recorded by the radio transceivers which is used to compute the reflectivity of every point in the scene. 
 
@@ -148,7 +149,7 @@ A single sheet of eWallpaper contains 16384 low-power Rocket processors, arrange
 
 The Rocket processor is based on the RISC-V \cite{riscv} ISA. It has a 6-stage, in-order pipeline, running at 1GHz. It also has an additional floating-point unit, capable of approximately 200 MFlops/s. Each processor has a 64KB L1 cache and 100KB of on-chip main memory. There is therefore no DRAM and no off-processor memory in the eWallpaper.
 
-In order to implement the imaging algorithm described in Section 2 on the eWallpaper, two important operations need to be defined: the row-wise transpose and the column-wise transpose.
+In order to implement the imaging algorithm described in Section~\ref{algorithm-section} on the eWallpaper, two important operations need to be defined: the row-wise transpose and the column-wise transpose.
 
 \subsection{The Row-wise Transpose}
 
@@ -186,22 +187,20 @@ The column-wise transpose, shown in Figure~\ref{column_wise_transpose}, works in
 
 \subsection{The Distributed 3D Imaging Algorithm}
 
-HERE
-
-The row and column transpose operations allow the image processing algorithm, as previously described by Patrick, to be expressed as a sequence of operations that run on each node.
-The exact same operations run on all the nodes concurrently.
-Yellow boxes represent computation operations.
-Gray boxes represent communication between the processors.
-The 2D FFT is computed as 2 1D FFTs each preceded by a row or column transpose. 
-After the 2D FFT, the processor is able to perform a backward propagation and Stolt interpolation on locally stored data.
-The final 3D inverse FFT is implemented using 3 separate 1D FFTs with interleaving row and column transposes.
+With the row-wise and column-wise transpose operations defined, the imaging algorithm described in Section~\ref{algorithm-section} can be defined as a sequence of computation and communication steps, as in Figure~\ref{algorithm_labeled}. These operations are performed concurrently, but not necessarily in synchronization, on all processors in the network. The yellow boxes in the diagram represent computational operations, while the grey boxes represent communication.
 
 \begin{figure}[!h]
 \centering
-\includegraphics*[width=0.25\textwidth, viewport=170 125 420 700]{figures/algorithm.pdf}
-\caption{The Distributed 3D Range Migration Algorithm}
-\label{algorithm}
+\includegraphics*[width=0.3\textwidth, viewport=10 70 430 750]{figures/algorithm_labeled.pdf}
+\caption{The distributed 3D range migration algorithm that runs on each processor}
+\label{algorithm_labeled}
 \end{figure}
+
+The 2D FFT across the entire dataset, with respect to $x$ and $y$, is computed as a set of 1D FFTs along the $x$-axis, followed by a set of 1D FFTs along the $y$-axis. At the start of the algorithm, each processor contains the echoes that were recorded at its own antenna, for each of the 256 frequency steps. A row-wise transpose is performed, with the result being that each processor contains the echoes at all 128 $x$ positions for just two frequencies. The processor then performs two 128-point 1D FFTs on the locally stored data. This is followed by a column-wise transpose, so that each processor now contains the echo data at all 128 $y$ positions, for a particular $kx$ value and just two frequencies. Finally, each processor once again performs two 128-point 1D FFTs on locally stored data, completing the 2D FFT.
+
+After the 2D FFT, a row-wise transpose is performed, with the result being that each processor contains all 256 frequency values for a particular $kx$ and $ky$. The processor is now able to perform a backward propagation and Stolt interpolation on locally stored data, without needing to communicate with any other processors. The backward propagation involves multiplying each stored value by a unique complex number. Stolt interpolation is achieved using linear interpolation. Both the back propagation coefficients and the linear interpolation indices are precomputed to accelerate computation.
+
+The final 3D inverse FFT is implemented using three separate 1D IFFTs with interleaving row and column transposes. At the end of the algorithm, each processor contains the reflectivity at all 256 depths ($z$-values) at a particular $(x,y)$ position.
 
 \section{High Performance Functional Simulator}
 
@@ -222,10 +221,10 @@ Our distributed algorithm was tested on our functional simulator running on a 64
 
 Figure [] shows an input scene consisting of a collection of points distributed along the surface of a sphere, and the reconstructed image is shown in Figure []. The input data for the recovered images shown in Figure [] and [] was generated from a CT scan of human head from the Stanford dataset. The recovered head is shown from two different angles.
 
-
-\section{Simulated Imaging Results}
-
 \section{Investigation of Design Parameters}
+
+Simon was HERE!!!
+ 
 - communication patterns
 - bandwidth
 - array size (resolution)
@@ -238,6 +237,13 @@ Observe:
 1. For this, you need a timing model. you need a traffic simulator.
 2. We investigate (vary bandwidth, vary comuication, vary ..)
 -- describe different communication patterns
+
+\begin{figure}[!h]
+\centering
+\includegraphics*[width=0.4\textwidth, viewport=80 10 700 590]{figures/comm_patterns_arrows.pdf}
+\caption{Possible communication patterns for the imaging algorithm}
+\label{comm_patterns_arrows}
+\end{figure}
 
 \section{Performance Results}
 3. Show the trends vs. parameters
@@ -264,7 +270,11 @@ Since then, range migration has been extended and adapted to many imaging fields
 
 \section{Conclusion}
 - Conclude.
+
 - Future Work.
+ - Build HW prototype
+ - Make row/column transpose twice as fast
+ - Investigate more efficient 2D and 3D FFTs
 
 \subsection*{Acknowledgements}
 SWARM lab?
