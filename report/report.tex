@@ -1,6 +1,7 @@
 \documentclass[twocolumn]{article}
 \usepackage{amsmath}
 \usepackage{graphicx}
+\usepackage{subfig}
 
 \pagestyle{empty}
 \setlength{\textwidth}{7in}
@@ -75,7 +76,14 @@ During the scanning procedure, a single radio antenna will emit a continuous sin
 
 We will assume, in the development of the algorithm, that the speed of light is known and constant for all points in the scene, i.e. that there is negligible difference between the speed of light in human tissue and in air. We also do not consider any diffraction, refraction, or attenuation effects. We will model the scene as a collection of discrete point targets distributed uniformly throughout the region to be imaged. Each point target, at position $(x,y,z)$, is fully described by a single coefficient, $0 \leq r \leq 1$, which represents its reflectivity. The sin wave emitted by a radio antenna is assumed to travel, unimpeded, to all points in the scene. They reflect off the targets and arrive back at the radio transceiver with amplitude $r$. The superposition of the reflected waves from each target is recorded by the radio transceiver. This physical model is minimal but is sufficient for the purposes of imaging.
 
-Formally, consider a single antenna at position $(x', y', 0)$. Let $d = \sqrt{(x'-x)^2+(y'-y)^2+z^2}$ be the distance from the antenna to a target at position $(x,y,z)$. The time it takes for the sin wave emitted by the antenna to travel to the target and back again is $t = \frac{2d}{c}$, where $c$ is the speed of light. In that time, the phase of the transmitted sin wave has advanced by $\phi = \omega t$, where $\omega$ is the angular frequency of the sin wave. The sin wave received by the transceiver can be represented as a single complex number, $r e^{-j \phi}$, where the amplitude of the wave is represented by the magnitude, and the phase offset is represented by the angle. Thus, the final received signal at the transceiver, from the superposition of the reflected waves from each point target, is given by
+\begin{figure}[!h]
+\centering
+\includegraphics*[width=0.3\textwidth]{figures/antenna.pdf}
+\caption{Geometric layout of antenna plane and a single point target.}
+\label{antenna}
+\end{figure}
+
+Formally, consider a single antenna at position $(x', y', 0)$. Let $d = \sqrt{(x'-x)^2+(y'-y)^2+z^2}$ be the distance from the antenna to a target at position $(x,y,z)$ (Figure \ref{antenna}). The time it takes for the sin wave emitted by the antenna to travel to the target and back again is $t = \frac{2d}{c}$, where $c$ is the speed of light. In that time, the phase of the transmitted sin wave has advanced by $\phi = \omega t$, where $\omega$ is the angular frequency of the sin wave. The sin wave received by the transceiver can be represented as a single complex number, $r e^{-j \phi}$, where the amplitude of the wave is represented by the magnitude, and the phase offset is represented by the angle. Thus, the final received signal at the transceiver, from the superposition of the reflected waves from each point target, is given by
 %
 \begin{gather}
 s(x', y', z=0, \omega) = \int \int \int r(x,y,z) e^{j \phi(x,y,z)} dx dy dz \nonumber \\
@@ -204,7 +212,14 @@ The final 3D inverse FFT is implemented using three separate 1D IFFTs with inter
 
 \section{High Performance Functional Simulator}
 
-To aid the development of the imaging algorithm, we created a functional simulator for fast prototyping and debugging of eWallpaper applications. eWallpaper applications are written in Single Program Multiple Data (SPMD) style, and one program instance is launched per simulated processor. Each processor knows its own coordinates on the eWallpaper processor grid, and has access to a set of minimal communication functions for sending and receiving data packets from its immediate neighbors. The simulator was parallelized to run efficiently on an MPI cluster. Within a MPI node, multiple virtual processors are simulated using Pthreads. 
+To aid the development of the imaging algorithm, we created a functional simulator for fast prototyping and debugging of eWallpaper applications. eWallpaper applications are written in Single Program Multiple Data (SPMD) style, and one program instance is launched per simulated processor. Each processor knows its own coordinates on the eWallpaper processor grid, and has access to a set of minimal communication functions for sending and receiving data packets from its immediate neighbors. The simulator was parallelized to run efficiently on an MPI cluster. Within a MPI node, multiple virtual processors are simulated using Pthreads (see Figure \ref{mpi_sim}).
+
+\begin{figure}[!h]
+\centering
+\includegraphics*[width=0.3\textwidth]{figures/mpi_sim.pdf}
+\caption{Structural overview of MPI-based functional simulator.}
+\label{mpi_sim}
+\end{figure}
 
 The following basic functions are provided for interprocessor communication:
 \begin{itemize}
@@ -219,9 +234,52 @@ For computationally intensive applications, the simulator can be configured to r
 
 \section{Simulated Imaging Results}
 
-Our distributed algorithm was tested on our functional simulator running on a 64 core cluster. Antenna responses are artificially generated from an input test scene. Figure [] shows an input scene consisting of three points of varying reflectivities, the top-left point being least reflective and the bottom-right point being most reflective. Figure [] shows the reconstructed image output by our algorithm. The brightest object in the recovered image corresponds to the point with highest reflectivity. 
+Our distributed algorithm was tested on our functional simulator running on a 64 core cluster. Antenna responses were artificially generated given an input scene. Figure \ref{3_points_input} shows an input scene consisting of three points of varying reflectivities, the top-left point being the least reflective and the bottom-right point being the most reflective. Figure \ref{3_points_output} shows the reconstructed image output by our algorithm. The brightest object in the recovered image corresponds to the point with highest reflectivity. 
 
-Figure [] shows an input scene consisting of a collection of points distributed along the surface of a sphere, and the reconstructed image is shown in Figure []. The input data for the recovered images shown in Figure [] and [] was generated from a CT scan of human head from the Stanford dataset. The recovered head is shown from two different angles.
+\begin{figure}
+\begin{centering}
+
+\subfloat[Input Scene]{
+	\includegraphics[bb=80bp 80bp 460bp 500bp,clip,scale=0.2]{figures/3_points_input.png}
+	\label{3_points_input}}
+\subfloat[Reconstructed Image]{
+	\includegraphics[bb=100bp 100bp 600bp 600bp,clip,scale=0.2]{figures/3_points.png}
+	\label{3_points_output}}
+	
+\end{centering}
+\caption{Input scene with three points of different reflectivities.}
+\end{figure}
+
+Figure \ref{sphere_input} shows an input scene consisting of a collection of points distributed along the surface of a sphere. Figure \ref{sphere_output} shows that the sphere is correctly reconstructed by our algorithm. For figures \ref{skull_angle1} and \ref{skull_angle2}, the antenna responses are artificially generated from a set of points from the Stanford volume data archive obtained by a CT scan of a human head. The recovered 3D image of the head is shown from two different angles.
+
+\begin{figure}
+\begin{centering}
+
+\subfloat[Input Scene]{
+	\includegraphics[bb=80bp 80bp 460bp 500bp,clip,scale=0.2]{figures/sphere_input.png}
+	\label{sphere_input}}
+\subfloat[Reconstructed Image]{
+	\includegraphics[bb=100bp 100bp 600bp 600bp,clip,scale=0.2]{figures/sphere.png}
+	\label{sphere_output}}
+	
+\end{centering}
+\caption{Input scene with points distributed along sphere.}
+\end{figure}
+
+
+\begin{figure}
+\begin{centering}
+
+\subfloat[]{
+	\includegraphics[bb=80bp 80bp 460bp 500bp,clip,scale=0.2]{figures/skull4.png}
+	\label{skull_angle1}}
+\subfloat[]{
+	\includegraphics[bb=100bp 100bp 600bp 600bp,clip,scale=0.2]{figures/skull6.png}
+	\label{skull_angle2}}
+	
+\end{centering}
+\caption{Two angles of reconstructed scene from CT scan.}
+\end{figure}
 
 \section{Investigation of Design Parameters}
 
