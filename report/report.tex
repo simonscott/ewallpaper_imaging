@@ -68,87 +68,79 @@ Taking these limitations into account, we developed a distributed implementation
 
 \section{The 3D Range Migration Algorithm}
 
-The algorithm we adapted for performing 3D range migration is identical to the one presented in [] for 3D imaging using millimeter waves. The input to the algorithm is a 3D array of amplitudes and phase offsets recorded by the radio transceiver which is used to compute the reflectivity of every point in the scene. During the scanning procedure, a single radio antenna will emit a continuous sinusoidal wave. This wave will reflect off of the objects in the room and is received by a radio transceiver located beside the transmitting antenna. 
+The algorithm we adapted for performing 3D range migration is identical to the one presented in [] for 3D imaging using millimeter waves. The input to the algorithm is a 3D array of amplitudes and phase offsets recorded by the radio transceivers which is used to compute the reflectivity of every point in the scene. 
 
-The procedure for scanning the room and the technique used for forming a 3D image out of the received echoes are similar to the techniques used in seismic data processing [], synthetic aperture radar [], and microwave holography []. The basics of the procedure is presented here. For a more detailed explanation, please refer to [].
+During the scanning procedure, a single radio antenna will emit a continuous sinusoidal wave. The wave will reflect off of the objects in the room and is received by a radio transceiver located beside the transmitting antenna. The amplitude of the received sin wave and the phase offset between the transmitted and received wave are recorded. This procedure is repeated over a range of evenly spaced frequencies and for each antenna in turn. In our setup, we have 128$\times$128 antennas, each of which scan through 256 frequencies, thus the input to the imaging algorithm is 128$\times$128$\times$256 amplitudes and phase offsets.
 
-The scanning procedure starts with a single antenna emitting a continuous sinusoidal wave with angular frequency $\omega$. The sinusoidal wave reflects off the objects present in the room. A radio transceiver at the same position as the antenna will record the amplitude of the reflected sin wave, and the phase offset between the transmitted and received sin wave. The recorded signal is represented as a single complex number, $re^{j\phi}$, where the magnitude, $r$, represents the received amplitude, and $\phi$ represents the phase offset.This procedure is repeated for a number of frequencies, starting with a base frequency, $f_0$, and stepping in increments of, $\Delta f$, and for each antenna in turn. In our case, we repeat this procedure for 256 different frequencies, from 10GHz to 20GHz, and for each of the 128$\times$128 antennas. Thus the input to the imaging algorithm is a 128$\times$128$\times$256 array of amplitudes and phase offsets.
+We will assume, in the development of the algorithm, that the speed of light is known and constant for all points in the scene, i.e. that there is negligible difference between the speed of light in human tissue and in air. We also do not consider any diffraction, refraction, or attenuation effects. We will model the scene as a collection of discrete point targets distributed uniformly throughout the region to be imaged. Each point target, at position $(x,y,z)$, is fully described by a single coefficient, $0 \leq r \leq 1$, which represents its reflectivity. The sin wave emitted by a radio antenna is assumed to travel, unimpeded, to all points in the scene. They reflect off the targets and arrive back at the radio transceiver with amplitude $r$. The superposition of the reflected waves from each target is recorded by the radio transceiver. This physical model is minimal but is sufficient for the purposes of imaging.
 
-Formalizing everything, consider a single point target at $(x,y,z)$. The antennas sit at the plane $z=0$ at point $(x',y',0)$. The distance, $d$, to the from the antenna to the target is given by
-
-\[
-d=\sqrt{(x'-x)^{2}+(y'-y)^{2}+z^{2}}.
-\]
-The time it takes for the transmitted sin wave to travel from the antenna to the target, reflect off, and come back to the antenna is
- \[
-t=\frac{2d}{c},
-\]
-where $c$ is the speed of light. In that time, the phase of the transmitted sin wave has advanced by
-\[
-\phi = \omega t,
-\]
-where $\omega$ is the angular frequency of the transmitted sin wave. The received sin wave at antenna position $(x',y',z=0)$ for a transmitted sin wave with angular frequency $\omega$ is then given by
+Formally, consider a single antenna at position $(x', y', 0)$. Let $d = \sqrt{(x'-x)^2+(y'-y)^2+z^2}$ be the distance from the antenna to a target at position $(x,y,z)$. The time it takes for the sin wave emitted by the antenna to travel to the target and back again is $t = \frac{2d}{c}$, where $c$ is the speed of light. In that time, the phase of the transmitted sin wave has advanced by $\phi = \omega t$, where $\omega$ is the angular frequency of the sin wave. The sin wave received by the transceiver can be represented as a single complex number, $r e^{-j \phi}$, where the amplitude of the wave is represented by the magnitude, and the phase offset is represented by the angle. Thus, the final received signal at the transceiver, from the superposition of the reflected waves from each point target, is given by
+%
 \begin{gather}
-s(x',y',z=0,\omega) = re^{j\phi} \\
-	= re^{j \omega \frac{2}{c} \sqrt{(x'-x)^2 + (y'-y)^2 + z^2}},
-\end{gather}
-where $r$ is the amplitude of the received sin wave.
-
-The recorded signal has, thus far, been described as the amplitude and phase offset resulting from a sin wave emitted from the antenna to reflect off the target and come back to the antenna. An alternative and equivalent interpretation of the received signal is of a target at $(x,y,z)$ that directly emits a sin wave of amplitude $r$, and travels at half the speed of light, $\frac{c}{2}$, and is recorded at the antenna. Under this interpretation, the scene generates a wavefield, $s(x,y,z,\omega)$, and the antennas samples the wavefield on the plane $z=0$, $s(x',y',z=0,\omega)$. 
-
-The wavefield at depth $z$ can be recovered by propagating the recorded wavefield, $s(x',y',z=0,\omega)$, backwards in time from the antenna towards the source. This can be achieved by simply swapping the sign of the phase delay term, which represents propagation backwards in time, and summing over the contribution from each antenna.
-\begin{gather}
-s(x,y,z,\omega) =\int\int s(x',y',z=0,\omega) \\
-e^{-j \omega \frac{2}{c} \sqrt{(x'-x)^{2}+(y'-y)^{2}+z^{2}}} dx'dy'
+s(x', y', z=0, \omega) = \int \int \int r(x,y,z) e^{j \phi(x,y,z)} dx dy dz \nonumber \\
+= \int \int \int r(x,y,z) e^{j \frac{2}{c} \sqrt{(x'-x)^2 + (y'-y)^2 + z^2}} dx dy dz.
 \end{gather}
 
-After backwards propagation, the final 3D image can be reconstructed by integrating the expression over all frequencies.
-\[
+The received signal has, thus far, been described as the superposition of the reflections from each point target of a sin wave originally emitted by the antenna. Alternatively, we can equivalently interpret the point targets to be, themselves, emitting sin waves which travel at half the speed of light, $\frac{c}{2}$, to arrive at the transceiver. Under this interpretation, the scene generates a wavefield, $s(x,y,z,\omega)$, and the transceivers sample the wavefield on the plane $z=0$ to obtain $s(x,y,z=0,\omega)$. Our goal is to recover the full wavefield, $s(x,y,z,\omega)$ given only $s(x,y,z=0,\omega)$.
+
+The wavefield at depth $z$ can be recovered by back propagating the recorded wavefield, $s(x, y, z=0, \omega)$, from the antenna to the target. This can be achieved by simply swapping the sign of the phase delay term, which represents propagation backwards in time, and summing over the contribution from each antenna.
+%
+\begin{gather}
+s(x,y,z,\omega) =\int\int s(x',y',z=0,\omega) \nonumber \\
+e^{-j \omega \frac{2}{c} \sqrt{(x'-x)^{2}+(y'-y)^{2}+z^{2}}} dx'dy'.
+\end{gather}
+%
+After backwards propagation, the final 3D image can be reconstructed by integrating the wavefield over all frequencies.
+\begin{equation}
 s(x,y,z)=\int s(x,y,z,\omega) d\omega.
-\]
+\end{equation}
 
-While the above algorithm is intuitive, the need to integrate over all frequencies and antenna positions for each scene position makes computation prohibitively expensive. For 128$\times$128 antennas, each emitting 256 frequencies, it took over two and a half hours on a 24 node cluster to image a room. To achieve video framerates, computations must be done in the frequency domain.
+While the above algorithm is intuitive, the need to integrate over all frequencies and antenna positions for each scene position makes computation prohibitively expensive. For 128$\times$128 antennas and 256 frequencies, it took over two and a half hours on a 24 node cluster to image a room. To make computation tractable, we pre-transform our received signal to the frequency domain, where we will do all our computations, and then transform back to the spatial domain.
 
-If we first pre-transform the received signal to the frequency domain, 
-\[
-S(k_x,k_y,z=0,\omega) = \text{FT}_{x,y} s(x, y, z=0, \omega),
-\]
-backward propagation can be done with a simple multiplication. 
-\[
-S(k_x, k_y, z, \omega) = S(k_x, k_y, z=0, \omega) e^{-j k_z z},
-\]
-where 
-\[
-k_z = \sqrt{ \frac{2 \omega}{c} ^ 2 - k_x^2 - k_y^2}.
-\]
-The image is reconstructed once again by integrating over the backwards propagated field over all frequencies.
-\[
-S(k_x, k_y, z) = \int S(k_x, k_y, z=0, \omega) e^{-j k_z z} d\omega.
-\]
-Finally, to avoid computing this last integral, we note that the form closely resembles an inverse Fourier transform. If we change $\omega$ to $k_z$ using linear interpolation, we can compute the integral using an efficient inverse FFT. This is called Stolt interpolation in the literature.
-\[
-S(k_x, k_y, z=0, \omega) \rightarrow S'(k_x, k_y, z=0, k_z)
-\]
+Let $S(k_x,k_y,z=0,\omega) = \text{FT}_{x,y} \{ s(x, y, z=0, \omega) \}$ be the Fourier transform of the recorded wavefield with respect to $x$ and $y$. Back propagation becomes an efficient element-wise multiplication in the frequency domain.
+\begin{equation}
+	S(k_x, k_y, z, \omega) = S(k_x, k_y, z=0, \omega) e^{-j k_z z},
+\end{equation}
+where
+\begin{equation}
+  	k_z = \sqrt{ (\frac{2 \omega}{c}) ^ 2 - k_x^2 - k_y^2}.
+\end{equation}
 
+The image in the frequency domain is reconstructed, as before, by integrating the back propagated field over all frequencies.
+\begin{equation}
+	S(k_x, k_y, z) = \int S(k_x, k_y, z=0, \omega) e^{-j k_z z} d\omega. \label{eq:stolt-integral}
+\end{equation}
+Finally, we use the inverse Fourier transform to recover the image in the spatial domain, $s(x,y,z) = \text{IFT}_{k_x, k_y} \{ S(k_x, k_y, z) \}$. 
+
+The pre and post Fourier transforms can be done efficiently using FFTs, and back propagation is a fast element-wise multiplication in the frequency domain. The only remaining integral at this point is given by equation \ref{eq:stolt-integral}, which as a further optimization, can be computed efficiently by noting that it has a similar form to the inverse Fourier transform. 
+
+By resampling $S(k_x, k_y, z=0, \omega)$ at evenly spaced intervals of $k_z$ (a technique known as Stolt interpolation in the seismic imaging field),
+\begin{equation}
+	S'(k_x, k_y, z=0, k_z) = \text{Stolt}\{ S(k_x, k_y, z=0, \omega) \},
+\end{equation}
+the integral in equation \ref{eq:stolt-integral} can be efficiently computed using an inverse FFT. Resampling may be done using linear interpolation.
 \begin{gather}
-S(k_{x},k_{y},z)  =  \int S'(k_{x},k_{y},z=0,k_{z})e^{-jk_{z}z}dk_{z}\\
-  =  \text{IFT}_{k_{z}}\{S'(k_{x},k_{y},z=0,k_{z})e^{-jk_{z}z_{0}}\}
+	S(k_x, k_y, z) = \int S(k_x, k_y, z=0, \omega) e^{-j k_z z} d\omega 	\nonumber \\
+	= \int S'(k_x, k_y, z=0, k_z) e^{-j k_z z} dk_z	\nonumber \\
+	= \text{IFT}_{k_z} \{ S'(k_x, k_y, z=0, k_z) e^{-j k_z z_0} \},
 \end{gather}
+where $z_0$ is the minimum distance from the antenna plane that we wish to image.
 
-Thus, combining everything, the final algorithm is given as follows:
-\[
-s(x,y,z)=\text{IFT}_{k_{x},k_{y}}\{\text{IFT}_{k_{z}}\{\text{\text{Stolt}}\{\text{FT}_{x,y}\{s(x',y',z=0,\omega)\}\}e^{-jk_{z}z_{0}}\}\}.
-\]
-
-$s(x', y', z=0, \omega)$ is a 3d array of complex numbers with dimensions array width, by array height, by the number of frequencies. We take the 2D Fourier transform of the received signal with respect to $x$ and $y$. We then perform Stolt interpolation along the frequency axis to obtain values at evenly spaced intervals of $k_z$. Backwards propagation in the frequency domain is done by multiplying each element by a complex exponential. And finally we perform a 3D inverse Fourier transform to reconstruct the image. The reconstructed image, $s(x,y,z)$, is a 3D array whose values represent the reflectivity at each point in the room.
-
-Also talk about:
-
-- Three-Dimensional Millimeter-Wave Imaging for Concealed Weapon Detection
-
-- 3-D Radar Imaging Using Range Migration Techniques
-
-- SAR Data Focusing Using Seismic Migration Techniques
+The whole algorithm is then given as follows:
+1. Pre-transform the received signal to the frequency domain using a FFT.
+\begin{equation}
+	S(k_x,k_y,z=0,\omega) = \text{FT}_{x,y} \{ s(x, y, z=0, \omega) \}.
+\end{equation}
+2. Perform back propagation and image reconstruction in the frequency domain, using Stolt interpolation.
+\begin{gather}
+	S(k_x, k_y, z) = 	\nonumber \\
+	\text{IFT}_{k_z} \{ \text{Stolt}\{ S(k_x, k_y, z=0, \omega) \} e^{-j k_z z_0} \}.
+\end{gather}
+3. Transform the reconstructed image back to the spatial domain using an IFFT.
+\begin{equation}
+	s(x, y, z) = \text{IFT}_{k_x, k_y} \{ S(k_x, k_y, z) \}.
+\end{equation}
+The reconstructed image, $s(x,y,z)$, is a 3D array whose values represent the reflectivity at each point the room.
 
 \section{Implementation on a 2D Mesh Network}
 
