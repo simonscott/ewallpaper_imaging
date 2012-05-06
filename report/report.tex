@@ -160,7 +160,13 @@ In order to implement the imaging algorithm described in Section 2 on the eWallp
 
 \subsection{The Row-wise Transpose}
 
-Describe the row-wise transpose.
+Assuming there are P processors in a row in the mesh network, each containing N data values, the values stored on a single processor $q$ can be expressed as:
+\[ D_q = \{d_{q1}, d_{q2}, d_{q3}, ..., d_{qN}\} \]
+After performing the row-wise transpose, the values stored on processor $q$ are:
+\[ D_q = \{d_{1q}, d_{2q}, d_{3q}, ..., d_{Nq}\} \]
+Therefore, after the transpose, the $q^{th}$ processor in the row contains the $q^{th}$ value stored by all the processors before the transpose.
+
+The 3D matrix on the left of Figure~\ref{row_wise_transpose} represents a 3x3 processor array, with each processor storing the magnitude and phase values for 3 frequencies(represented by the 3 circles at each processor). In order to perform a row-wise transpose, each processor first sends its locally stored data to its left and right neighbors. Once the transmission has completed, each processor receives a complete packet from its left neighbor. It extracts the required value from this packet (the $q^{th}$ processor extracts the $q^{th}$ value from the packet) and forwards the packet to the right neighbor. Similarly, it receives and packet from its right neighbor, extracts a value, and forwards the packet to the left neighbor. In this way, a full row-wise transpose can be performed in $P-1$ hops for a row of $P$ processors.
 
 \begin{figure}[!h]
 \centering
@@ -169,20 +175,26 @@ Describe the row-wise transpose.
 \label{row_wise_transpose}
 \end{figure}
 
-Explain that this is near optimal, based on 2 cited papers.
+The 3D matrix on the right of Figure~\ref{row_wise_transpose} shows the data stored in each processor after the transpose. The processors in the first column store the first frequency values, the processors in the second column the second frequency values, etc. Note that during the row-wise transpose operation, only processors in the same row communicate. This allows all rows to be transposed at the same time.
+
+This is very similar to the Ring Exchange Algorithm described by Christara et al \cite{efficient-transposition} for ring networks. Christara et al argue that store and forward is better than wormhole routing for the transposition operation on a ring network, as each processor requires data from all other processors. Furthermore, they prove that this approach is optimal for a ring network, as it performs the transpose in $P-1$ hops.
+
+The one difference between the Ring Exchange Algorithm and our row-wise transpose is that the processors, in our approach, forward the entire packet after extracting the required values, while the processors in the Ring Exchange Algorithm only forward the values that they do not require. The result is that our approach incurs twice the total bandwidth cost as the Ring Exchange Algorithm.
 
 \subsection{The Column-wise Transpose}
 
-Same as row-wise transpose, except that processors in same column communicate. After comm, processors in 1st row have 1st freq value, 2nd row have 2nd.
+The column-wise transpose, shown in Figure~\ref{column_wise_transpose}, works in the same way as the row-wise transpose, except that processors in the same column communicate.
 
 \begin{figure}[!h]
 \centering
-\includegraphics*[width=0.5\textwidth, viewport = 10 10 620 150]{figures/column_wise_transpose.pdf}
+\includegraphics*[width=0.5\textwidth, viewport = 40 10 650 150]{figures/column_wise_transpose.pdf}
 \caption{A 3x3 processor array, before and after the column-wise transpose}
 \label{column_wise_transpose}
 \end{figure}
 
 \subsection{The Distributed 3D Imaging Algorithm}
+
+HERE
 
 The row and column transpose operations allow the image processing algorithm, as previously described by Patrick, to be expressed as a sequence of operations that run on each node.
 The exact same operations run on all the nodes concurrently.
@@ -247,12 +259,14 @@ Since then, range migration has been extended and adapted to many imaging fields
 - Three-Dimensional Millimeter-Wave Imaging for Concealed Weapon Detection
 - 3-D Radar Imaging Using Range Migration Techniques
 - SAR Data Focusing Using Seismic Migration Techniques
+- Mention that one group accelerated a version of the 2D algorithm using GPUs. Not 3D though.
 
 - concealed weapons
 - original SAR paper
 - near-field 3D SAR imaging
 - realtime through-wall imaging
 - FFT's on ring topologies
+- Matrix transpose on 1D array using systolic arrays \cite{systolic-arrays-transpose}
 
 - Applications: heart rate monitoring for Olympics
 
