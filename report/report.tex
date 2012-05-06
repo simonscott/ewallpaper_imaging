@@ -204,16 +204,18 @@ The final 3D inverse FFT is implemented using three separate 1D IFFTs with inter
 
 \section{High Performance Functional Simulator}
 
-To help us develop the imaging algorithm, we created a functional simulator for fast prototyping and debugging of eWallpaper applications. Applications are written in Single Program Multiple Data style. One program instance is launched per simulated wallpaper CPU. The simulation runs on an MPI cluster. Within an MPI node, virtual CPUs are simulated using Pthreads.
+To aid the development of the imaging algorithm, we created a functional simulator for fast prototyping and debugging of eWallpaper applications. eWallpaper applications are written in Single Program Multiple Data (SPMD) style, and one program instance is launched per simulated processor. Each processor knows its own coordinates on the eWallpaper processor grid, and has access to a set of minimal communication functions for sending and receiving data packets from its immediate neighbors. The simulator was parallelized to run efficiently on an MPI cluster. Within a MPI node, multiple virtual processors are simulated using Pthreads. 
 
-Wallpaper processors communicate with each other using a minimal network API which provides three basic operations:
+The following basic functions are provided for interprocessor communication:
 \begin{itemize}
-\item send\_message(direction, message, message\_size) sends a message with the provided message size to one of the four neighbouring processors
-\item receive\_message(direction) receives a message from one of the neighbouring processors
-\item set\_receive\_buffer(direction, buffer) instructs the network router to place incoming packets in the provided buffer
+	\item \textbf{send\_message(direction, message, message\_size)} sends a message with the provided message size to one of the four neighboring processors.
+	\item \textbf{receive\_message(direction)} receives a message from one of the four neighboring processors. A pointer to the start of the message buffer is returned.
+	\item \textbf{set\_receive\_message(direction, buffer)} instructs the network router to place incoming packets in the provided buffer.
 \end{itemize}
 
-receive\_message blocks until there is a message waiting in the network buffer. send\_message blocks until the network router is free to send and the receiving processor has space available to hold the message. Note that send\_message returns as soon as message transmission begins, \emph{not} when message transmission is completed. Within a single MPI node, network functions are simulated using shared memory and mutexes. Across MPI node boundaries, network functions are implemented on top of MPI commands. These MPI node boundaries are invisible to the eWallpaper application.
+{\em send\_message} blocks until the network router is free to send and the receiving processor has space available to hold the message. Note that {\em send\_message} returns as soon as message transmission begins, {\em not} when message transmission is completed. {\em receive\_message} blocks until there is a message waiting in the network buffer. Within a single MPI node, network functions are simulated using shared memory and mutexes. Across MPI node boundaries, network functions are implemented on top of MPI Isend and Irecv operations. These MPI node boundaries are invisible to the eWallpaper application.
+
+For computationally intensive applications, the simulator can be configured to run on more MPI nodes, with a smaller number of virtual processors being simulated on each node. For faster prototyping and debugging, we can use less MPI nodes by increasing the number of simulated virtual processors per node. In the limit, we can configure the simulator to simulate {\em all} the virtual processors on a single node allowing the entire simulation to be run on a single local machine. This feature was of great benefit to us during the development phase of the algorithm, allowing a much shorter edit-test-debug cycle by circumventing the lengthy job-queue system on Nersc. 
 
 \section{Simulated Imaging Results}
 
