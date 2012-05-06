@@ -1,4 +1,5 @@
-\documentstyle[twocolumn]{article}
+\documentclass[twocolumn]{article}
+\usepackage{amsmath}
 \pagestyle{empty}
 \setlength{\textwidth}{7in}
 \setlength{\textheight}{9.125in}
@@ -64,8 +65,84 @@ The proposed design for a single sheet of eWallpaper consists of an array of 128
 Taking these limitations into account, we developed a distributed implementation of the 3D range migration algorithm that is both memory efficient and able to achieve video framerates.
 
 \section{The 3D Range Migration Algorithm}
+
+The procedure for scanning the room and the technique used for forming a 3D image out of the received echoes are similar to the techniques used in seismic data processing [], synthetic aperture radar [], and microwave holography []. The basics of the procedure is presented here. For a more detailed explanation, please refer to [].
+
+The scanning procedure starts with a single antenna emitting a continuous sinusoidal wave with angular frequency $\omega$. The sinusoidal wave reflects off the objects present in the room. A radio transceiver at the same position as the antenna will record the amplitude of the reflected sin wave, and the phase offset between the transmitted and received sin wave. The recorded signal is represented as a single complex number, $re^{j\phi}$, where the magnitude, $r$, represents the received amplitude, and $\phi$ represents the phase offset.This procedure is repeated for a number of frequencies, starting with a base frequency, $f_0$, and stepping in increments of, $\Delta f$, and for each antenna in turn. In our case, we repeat this procedure for 256 different frequencies, from 10GHz to 20GHz, and for each of the 128$\times$128 antennas. Thus the input to the imaging algorithm is a 128$\times$128$\times$256 array of amplitudes and phase offsets.
+
+Formalizing everything, consider a single point target at $(x,y,z)$. The antennas sit at the plane $z=0$ at point $(x',y',0)$. The distance, $d$, to the from the antenna to the target is given by
+\[
+d=\sqrt{(x'-x)^{2}+(y'-y)^{2}+z^{2}}.
+\]
+The time it takes for the transmitted sin wave to travel from the antenna to the target, reflect off, and come back to the antenna is
+ \[
+t=\frac{2d}{c},
+\]
+where $c$ is the speed of light. In that time, the phase of the transmitted sin wave has advanced by
+\[
+\phi = \omega t,
+\]
+where $\omega$ is the angular frequency of the transmitted sin wave. The received sin wave at antenna position $(x',y',z=0)$ for a transmitted sin wave with angular frequency $\omega$ is then given by
+\begin{gather}
+s(x',y',z=0,\omega) = re^{j\phi} \\
+	= re^{j \omega \frac{2}{c} \sqrt{(x'-x)^2 + (y'-y)^2 + z^2}},
+\end{gather}
+where $r$ is the amplitude of the received sin wave.
+
+The recorded signal has, thus far, been described as the amplitude and phase offset resulting from a sin wave emitted from the antenna to reflect off the target and come back to the antenna. An alternative and equivalent interpretation of the received signal is of a target at $(x,y,z)$ that directly emits a sin wave of amplitude $r$, and travels at half the speed of light, $\frac{c}{2}$, and is recorded at the antenna. Under this interpretation, the scene generates a wavefield, $s(x,y,z,\omega)$, and the antennas samples the wavefield on the plane $z=0$, $s(x',y',z=0,\omega)$. 
+
+The wavefield at depth $z$ can be recovered by propagating the recorded wavefield, $s(x',y',z=0,\omega)$, backwards in time from the antenna towards the source. This can be achieved by simply swapping the sign of the phase delay term, which represents propagation backwards in time, and summing over the contribution from each antenna.
+\begin{gather}
+s(x,y,z,\omega) =\int\int s(x',y',z=0,\omega) \\
+e^{-j \omega \frac{2}{c} \sqrt{(x'-x)^{2}+(y'-y)^{2}+z^{2}}} dx'dy'
+\end{gather}
+
+After backwards propagation, the final 3D image can be reconstructed by integrating the expression over all frequencies.
+\[
+s(x,y,z)=\int s(x,y,z,\omega) d\omega.
+\]
+
+While the above algorithm is intuitive, the need to integrate over all frequencies and antenna positions for each scene position makes computation prohibitively expensive. For 128$\times$128 antennas, each emitting 256 frequencies, it took over two and a half hours on a 24 node cluster to image a room. To achieve video framerates, computations must be done in the frequency domain.
+
+If we first pre-transform the received signal to the frequency domain, 
+\[
+S(k_x,k_y,z=0,\omega) = \text{FT}_{x,y} s(x, y, z=0, \omega),
+\]
+backward propagation can be done with a simple multiplication. 
+\[
+S(k_x, k_y, z, \omega) = S(k_x, k_y, z=0, \omega) e^{-j k_z z},
+\]
+where 
+\[
+k_z = \sqrt{ \frac{2 \omega}{c} ^ 2 - k_x^2 - k_y^2}.
+\]
+The image is reconstructed once again by integrating over the backwards propagated field over all frequencies.
+\[
+S(k_x, k_y, z) = \int S(k_x, k_y, z=0, \omega) e^{-j k_z z} d\omega.
+\]
+Finally, to avoid computing this last integral, we note that the form closely resembles an inverse Fourier transform. If we change $\omega$ to $k_z$ using linear interpolation, we can compute the integral using an efficient inverse FFT. This is called Stolt interpolation in the literature.
+\[
+S(k_x, k_y, z=0, \omega) \rightarrow S'(k_x, k_y, z=0, k_z)
+\]
+
+\begin{gather}
+S(k_{x},k_{y},z)  =  \int S'(k_{x},k_{y},z=0,k_{z})e^{-jk_{z}z}dk_{z}\\
+  =  \text{IFT}_{k_{z}}\{S'(k_{x},k_{y},z=0,k_{z})e^{-jk_{z}z_{0}}\}
+\end{gather}
+
+Thus, combining everything, the final algorithm is given as follows:
+\[
+s(x,y,z)=\text{IFT}_{k_{x},k_{y}}\{\text{IFT}_{k_{z}}\{\text{\text{Stolt}}\{\text{FT}_{x,y}\{s(x',y',z=0,\omega)\}\}e^{-jk_{z}z_{0}}\}\}.
+\]
+
+$s(x', y', z=0, \omega)$ is a 3d array of complex numbers with dimensions array width, by array height, by the number of frequencies. We take the 2D Fourier transform of the received signal with respect to $x$ and $y$. We then perform Stolt interpolation along the frequency axis to obtain values at evenly spaced intervals of $k_z$. Backwards propagation in the frequency domain is done by multiplying each element by a complex exponential. And finally we perform a 3D inverse Fourier transform to reconstruct the image. The reconstructed image, $s(x,y,z)$, is a 3D array whose values represent the reflectivity at each point in the room.
+
+Also talk about:
+
 - Three-Dimensional Millimeter-Wave Imaging for Concealed Weapon Detection
+
 - 3-D Radar Imaging Using Range Migration Techniques
+
 - SAR Data Focusing Using Seismic Migration Techniques
 
 \section{Implementation on a 2D Mesh Network}
@@ -81,7 +158,24 @@ Here
 - Distributed Algorithm
 
 \section{High Performance Functional Simulator}
-- mesh network API
+
+To help us develop the imaging algorithm, we created a functional simulator for fast prototyping and debugging of eWallpaper applications. Applications are written in Single Program Multiple Data style. One program instance is launched per simulated wallpaper CPU. The simulation runs on an MPI cluster. Within an MPI node, virtual CPUs are simulated using Pthreads.
+
+Wallpaper processors communicate with each other using a minimal network API which provides three basic operations:
+\begin{itemize}
+\item send\_message(direction, message, message\_size) sends a message with the provided message size to one of the four neighbouring processors
+\item receive\_message(direction) receives a message from one of the neighbouring processors
+\item set\_receive\_buffer(direction, buffer) instructs the network router to place incoming packets in the provided buffer
+\end{itemize}
+
+receive\_message blocks until there is a message waiting in the network buffer. send\_message blocks until the network router is free to send and the receiving processor has space available to hold the message. Note that send\_message returns as soon as message transmission begins, \emph{not} when message transmission is completed. Within a single MPI node, network functions are simulated using shared memory and mutexes. Across MPI node boundaries, network functions are implemented on top of MPI commands. These MPI node boundaries are invisible to the eWallpaper application.
+
+\section{Simulated Imaging Results}
+
+Our distributed algorithm was tested on our functional simulator running on a 64 core cluster. Antenna responses are artificially generated from an input test scene. Figure [] shows an input scene consisting of three points of varying reflectivities, the top-left point being least reflective and the bottom-right point being most reflective. Figure [] shows the reconstructed image output by our algorithm. The brightest object in the recovered image corresponds to the point with highest reflectivity. 
+
+Figure [] shows an input scene consisting of a collection of points distributed along the surface of a sphere, and the reconstructed image is shown in Figure []. The input data for the recovered images shown in Figure [] and [] was generated from a CT scan of human head from the Stanford dataset. The recovered head is shown from two different angles.
+
 
 \section{Simulated Imaging Results}
 
