@@ -283,20 +283,60 @@ Figure \ref{sphere_input} shows an input scene consisting of a collection of poi
 
 \section{Investigation of Design Parameters}
 
-Simon was HERE!!!
- 
-- communication patterns
-- bandwidth
-- array size (resolution)
-- amount of precomputation
-Observe:
-- framerate
-- cpu load
-- memory
+While the functional simulator allowed us to verify the correctness of our distributed algorithm, it did not allow us to determine the speed of the algorithm on the eWallpaper. Since the functional simulator ran on a supercomputing cluster, using software threads to emulate eWallpaper processors, the performance of the functional simulator is not representative of what we can expect to see on the actual eWallpaper.
 
-1. For this, you need a timing model. you need a traffic simulator.
-2. We investigate (vary bandwidth, vary comuication, vary ..)
--- describe different communication patterns
+The application code that ran on the functional simulator was therefore analyzed and a timing model was developed. This model, which is described below, showed us that the code spends more than 90\% of its time communicating. A network simulator was therefore also developed to allow us to investigate th effect of different communication patterns and network parameters on performance.
+ 
+\subsection{Timing Model}
+
+We assume that the antennas are arranged in a square array, with $N_{ant}$ antennas along one side of the array (the total number of antennas is $N_{ant} \times N_{ant}$), and that each antenna steps through $N_f$ frequency steps. Let $B$ be the network bandwidth, $L$ the network latency from one processor to a neighbor, $T_M$ the time to load or store a complex floating point number, and $T_F$ the time to perform a floating-point arithmetic operation. Table~\ref{timing-model-table} shows the time for each of the main steps in the distributed imaging algorithm.
+
+\begin{table}[!h]
+\centering
+\caption{Time for Individual Operations}
+\begin{tabular}{l p{4.5cm}}
+\hline
+\bf Operation & \bf Time \\
+\hline
+send\_left\_right & $N_f \times T_M + 4L$ \\
+receive\_and\_forward & $ \left( N_{ant} - 1 \right) \times \left( \frac{N_f \times 8}{B} + L \right)$ \\
+fft & $ N_f \times \log_2N_f \times (8T_F + 3T_M) $ \\
+ptwise\_vector\_mult & $ N_f \times (6T_F + 3T_M) $\\
+stolt\_interpolation & $ N_f \times \left(10T_F + 4T_M \right) $ \\
+\hline
+\end{tabular}
+\label{timing-model-table}
+\end{table}
+
+By combining the times for individual operations with the complete algorithm, as depicted in Figure~\ref{algorithm_labeled}, the time to compute a complete image can be computed as:
+{\small
+\[
+\begin{array}{l l l}
+
+T & = & 6 \times (\text{send\_left\_right} + \text{receive\_and\_forward}) + \\
+ &   & 5 \times \text{fft} + \text{ptwise\_vector\_mult} + \text{stolt\_interpolation} \\ 
+ & = & N_f \big( T_F(16 + 40\log_2N_f) + T_M(15\log_2N_f + 13) \big) + \\
+ &   & 6 \left( N_{ant} - 1 \right) \left( \frac{8N_f}{B} + L\right) + 24L
+
+\end{array}
+\]
+}
+
+\subsection{Network Simulator}
+
+To perform a detailed investigation of the communication patterns, we developed a discrete-event simulator that accurately models the network traffic on the eWallpaper.
+
+The simulated events include:
+1. pkt send
+2. pkt head and tail receive
+3. pkt acks and retries
+4. buffer full and empty events
+
+Worked by having event queue for each node. Whenever comm occurred between neighbors, appropriate event added to queues for both nodes.
+
+To accurately predict the performance of the algorithm on the actual eWallpaper hardware, the expected wallpaper bandwidth and latency parameters were used in modeling the events.
+
+Simulator allowed effect of bandwidth, array size, latency and amount of precomputation on performance (framerate, cpu util and memory usage) to be determined. Also allows number of difference comm patterns to be investigated. Figure~\ref{comm_patterns_arrows} shows the different patterns that were investigated. Green arrows shows movement of data before alg starts. Red shows where data is located at end of computation.
 
 \begin{figure}[!h]
 \centering
@@ -305,8 +345,13 @@ Observe:
 \label{comm_patterns_arrows}
 \end{figure}
 
+The single-node pattern is the simplest. All processors forward their echo data to single node. This node runs sequential version of algorithm without any communication. In the single-column pattern, all processors... TODO
+
 \section{Performance Results}
-3. Show the trends vs. parameters
+
+Fully-distributed pattern selected as optimal. Used for rest of performance analysis.
+
+Include breakdown of memory usage.
 
 \section{Related Work}
 

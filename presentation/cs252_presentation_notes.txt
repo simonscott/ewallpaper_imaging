@@ -344,7 +344,7 @@ We developed a functional simulator for eWallpaper applications.
 From the simulation of the application, a timing model and network simulator were created.
 
 These allow the performance of applications running on the actual eWallpaper to be predicted.
- 
+
 Our parallel imaging algorithm achieves realtime video framerates with feasible memory and bandwidth requirements.
 
 [Slide 35] (S)
@@ -352,4 +352,3 @@ Our parallel imaging algorithm achieves realtime video framerates with feasible 
 The next step is to build a FPGA-based hardware prototype of the eWallpaper. 
 
 This prototype will allow our imaging algorithm to be tested  in real life.
- 
