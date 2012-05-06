@@ -37,34 +37,31 @@ eWallpaper is a smart wallpaper containing thousands of embedded, low-power proc
 }
 \section{Introduction}
 
-eWallpaper is a smart wallpaper with thousands of low-power, RISC-V \cite{riscv} processors embedded within the paper. These processors are connected in a 2D mesh network, spaced 25mm apart. Each processor having its own radio transceiver and antenna.
+eWallpaper is a smart wallpaper with thousands of low-power, RISC-V \cite{riscv} processors embedded within the paper. These processors are connected in a 2D mesh network, spaced 25mm apart. Each processor has its own radio transceiver and antenna.
 
-One objective of the eWallpaper is to use the radio transceivers to image the room. The radios attached to each processor transmit millimeter-wave pulses. These pulses reflect off the objects in the room and the echoes are recorded back at the antennas. The echoes are combined using techniques borrowed from synthetic aperture radar to form a single three-dimensional image of the room.
+One of the main objectives of the eWallpaper is to use the radio transceivers to image the room. The radios attached to each of the processors transmit millimeter-wave pulses. These pulses reflect off the objects in the room and the echoes are recorded back at the antennas. The echoes are combined using techniques borrowed from synthetic aperture radar to form a single three-dimensional image of the room.
 
 \subsection{Applications of the eWallpaper Imaging System}
 
-While being able to use wallpaper to form 3D images of a room is interesting, basic imaging is not the final goal of the eWallpaper. It is instead a technology that allows other high-level functions possible, such as:
+While being able to use wallpaper to form 3D images of a room is interesting, basic imaging is not the final goal of the eWallpaper. It is instead a technology that enables other high-level functions possible, such as:
 
 \begin{itemize}
-\item gesture recognition
-\item assisted living
-\item security 
-\item cite paper for human recognition through walls
+\item Gesture recognition, allowing people to control the automated functions and multimedia in their homes.
+\item Monitoring of human vital signs and requesting medical assistance when, for example, a person is immobile on the floor.
+\item Tracking of persons without the house for security purposes. Gurbuz et al \cite{human-recognition} describe a technique for identifying people using radar signals.
+\item Creation of immersive audio fields for teleconferencing \cite{immersive-audio} that follow people as they walk around
 \end{itemize}
 
 \subsection{Challenges with Performing Realtime Imaging}
 
-The 3D range migration alg, described in next section, involves these steps....
-
-There are three key challenges in implementing the imaging algorithm on the wallpaper.
+The proposed design for a single sheet of eWallpaper consists of an array of 128 x 128 antennas and processors, with each processor storing 256 echoes. These echoes are then  combined to form a three-dimensional image of room using the 3D Range Migration Algorithm \cite{3d-imaging-concealed-weapon}, which has been adapted from synthetic aperture radar (SAR) techniques. There are three key challenges to implementing this algorithm on eWallpaper:
 \begin{enumerate}
-\item The recorded antenna responses are distributed amongst the 16000 processors.
-\item Moving data between processors can be difficult due to the restrictive mesh topology.
-\item the amount of available memory on each processor is extremely limited. No main memory store. On the order of 100KB.
+\item The recorded antenna responses are distributed amongst the 128 x 128 processors. This means that the algorithm must too be distributed.
+\item Moving data between processors can be expensive, due to the low-dimensional network topology (2D mesh).
+\item The amount of available memory on each processor is extremely limited, on the order of 100KB. Furthermore, there is no global memory storage. This means that the echoes cannot all be sent to a single processor for computation.
 \end{enumerate}
 
-This means that we need to be careful to design the algorithm and the communication pattern as no single processor can store the entire dataset.
-
+Taking these limitations into account, we developed a distributed implementation of the 3D range migration algorithm that is both memory efficient and able to achieve video framerates.
 
 \section{The 3D Range Migration Algorithm}
 - Three-Dimensional Millimeter-Wave Imaging for Concealed Weapon Detection
@@ -72,6 +69,9 @@ This means that we need to be careful to design the algorithm and the communicat
 - SAR Data Focusing Using Seismic Migration Techniques
 
 \section{Implementation on a 2D Mesh Network}
+
+Here
+
 - Describe wallpaper architecture and limitations in detail.
   - 128 x 128
   - mesh, as inked wires mean nearest neighbor comms only
@@ -112,6 +112,8 @@ Observe:
 - near-field 3D SAR imaging
 - realtime through-wall imaging
 - FFT's on ring topologies
+
+- Applications: heart rate monitoring for Olympics
 
 \section{Conclusion}
 - Conclude.
