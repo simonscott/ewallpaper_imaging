@@ -13,11 +13,11 @@ plus2pt minus5pt\belowdisplayskip \abovedisplayskip \abovedisplayshortskip \z@
 plus3pt\belowdisplayshortskip 6pt plus3pt
 minus3pt\let\@listi\@listI}
 %the following line was changed
-\def\subsize{\@setsize\subsize{12pt}\xipt\@xipt}
+\def\subsize{\@setsize\subsize{10pt}\xipt\@xipt}
 \def\section{\@startsection{section}{1}{\z@}{24pt plus 2 pt
 minus 2 pt} {12pt plus 2pt minus 2pt}{\large\bf}}
-\def\subsection{\@startsection {subsection}{2}{\z@}{12pt
-plus 2pt minus 2pt}{12pt plus 2pt minus 2pt}{\subsize\bf}}
+\def\subsection{\@startsection {subsection}{2}{\z@}{10pt
+plus 2pt minus 2pt}{10pt plus 2pt minus 2pt}{\subsize\bf}}
 \makeatother
 
 \begin{document}
@@ -32,15 +32,39 @@ University of California, Berkeley
 \thispagestyle{empty}
 \subsection*{\centering Abstract}
 \vspace*{-3mm}
-{\em
-eWallpaper is a smart wallpaper with embedded low-power processors and radio transceivers. An important application of the wallpaper is to use the radio transceivers to perform 3D imaging using synthetic aperture radar (SAR) techniques. The major obstacles to implementing these techniques on the wallpaper are the distribution of the data amongst the large number of processors, the restrictive 2D mesh topology and the limited local memory on each processor. Our major contribution is a distributed and memory efficient implementation of the 3D imaging algorithm that operates in realtime and achieves video framerates. A hardware simulator was built to allow rapid development and verification of eWallpaper applications. This simulator was parallelized using MPI and Pthreads, enabling fast simulation on a high-performance computing cluster. We developed a performance model and network traffic simulator to verify that our distributed algorithm meets the framerate and memory requirements when running on the actual eWallpaper hardware.
+\textit{
+eWallpaper is a smart wallpaper containing thousands of embedded, low-power processors and radio transceivers. An important application of the wallpaper is to use the radio transceivers to perform 3D imaging using synthetic aperture radar (SAR) techniques. The major obstacles to implementing these techniques on the wallpaper are the distribution of the data amongst the large number of processors, the restrictive 2D mesh topology and the limited local memory on each processor. Our major contribution is a distributed and memory efficient implementation of the 3D imaging algorithm that operates in realtime and achieves video framerates. A hardware simulator was built to allow rapid development and verification of eWallpaper applications. This simulator was parallelized using MPI and Pthreads, enabling fast simulation on a high-performance computing cluster. We developed a performance model and network traffic simulator to verify that our distributed algorithm meets the framerate and memory requirements when running on the actual eWallpaper hardware.
 }
 \section{Introduction}
-- describe eWallpaper
-- describe imaging application and motivation
--- gesture recognition, assisted living, etc...
-- how do you do imaging? (3D RMA) [cite ...]
-- the 3 challenges
+
+eWallpaper is a smart wallpaper with thousands of low-power, RISC-V \cite{riscv} processors embedded within the paper. These processors are connected in a 2D mesh network, spaced 25mm apart. Each processor having its own radio transceiver and antenna.
+
+One objective of the eWallpaper is to use the radio transceivers to image the room. The radios attached to each processor transmit millimeter-wave pulses. These pulses reflect off the objects in the room and the echoes are recorded back at the antennas. The echoes are combined using techniques borrowed from synthetic aperture radar to form a single three-dimensional image of the room.
+
+\subsection{Applications of the eWallpaper Imaging System}
+
+While being able to use wallpaper to form 3D images of a room is interesting, basic imaging is not the final goal of the eWallpaper. It is instead a technology that allows other high-level functions possible, such as:
+
+\begin{itemize}
+\item gesture recognition
+\item assisted living
+\item security 
+\item cite paper for human recognition through walls
+\end{itemize}
+
+\subsection{Challenges with Performing Realtime Imaging}
+
+The 3D range migration alg, described in next section, involves these steps....
+
+There are three key challenges in implementing the imaging algorithm on the wallpaper.
+\begin{enumerate}
+\item The recorded antenna responses are distributed amongst the 16000 processors.
+\item Moving data between processors can be difficult due to the restrictive mesh topology.
+\item the amount of available memory on each processor is extremely limited. No main memory store. On the order of 100KB.
+\end{enumerate}
+
+This means that we need to be careful to design the algorithm and the communication pattern as no single processor can store the entire dataset.
+
 
 \section{The 3D Range Migration Algorithm}
 - Three-Dimensional Millimeter-Wave Imaging for Concealed Weapon Detection
@@ -49,7 +73,11 @@ eWallpaper is a smart wallpaper with embedded low-power processors and radio tra
 
 \section{Implementation on a 2D Mesh Network}
 - Describe wallpaper architecture and limitations in detail.
+  - 128 x 128
+  - mesh, as inked wires mean nearest neighbor comms only
+  - Describe RISC-V performance and architecture
 - Row and Column Transpose
+- Explain that this is near optimal, based on 2 cited papers.
 - Distributed Algorithm
 
 \section{High Performance Functional Simulator}
@@ -95,7 +123,7 @@ Kurt?
 
 
 {\small
-\bibliographystyle{ieee}
+\bibliographystyle{IEEEtran}
 \bibliography{bib}
 }
 
