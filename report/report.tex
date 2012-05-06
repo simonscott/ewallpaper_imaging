@@ -71,6 +71,7 @@ The procedure for scanning the room and the technique used for forming a 3D imag
 The scanning procedure starts with a single antenna emitting a continuous sinusoidal wave with angular frequency $\omega$. The sinusoidal wave reflects off the objects present in the room. A radio transceiver at the same position as the antenna will record the amplitude of the reflected sin wave, and the phase offset between the transmitted and received sin wave. The recorded signal is represented as a single complex number, $re^{j\phi}$, where the magnitude, $r$, represents the received amplitude, and $\phi$ represents the phase offset.This procedure is repeated for a number of frequencies, starting with a base frequency, $f_0$, and stepping in increments of, $\Delta f$, and for each antenna in turn. In our case, we repeat this procedure for 256 different frequencies, from 10GHz to 20GHz, and for each of the 128$\times$128 antennas. Thus the input to the imaging algorithm is a 128$\times$128$\times$256 array of amplitudes and phase offsets.
 
 Formalizing everything, consider a single point target at $(x,y,z)$. The antennas sit at the plane $z=0$ at point $(x',y',0)$. The distance, $d$, to the from the antenna to the target is given by
+
 \[
 d=\sqrt{(x'-x)^{2}+(y'-y)^{2}+z^{2}}.
 \]
@@ -197,7 +198,10 @@ Observe:
 3. Show the trends vs. parameters
 
 \section{Related Work}
-Although range migration originated in the field of seismic data processing, it has been extended and adapted to a variety of fields including synthetic aperture radar and microwave holography. [] extends 2D range migration for 3D imaging using millimeter waves for detecting concealed weapons and is a direct inspiration for our work. In place of a 2D array of antennas, their system uses a scanned linear array of antennas and forms images at the rate of 1-2s per frame.
+
+The ?experimental setup? for performing imaging using a 2D array of transceivers originated in the field of seismic data processing. Controlled explosions, and later frequency-swept oscillators, were used to emit a pulse from the surface of the earth. The reflected pulses were recorded, and detailed images of the subterranean structures were formed. Techniques for improving computational efficiency, such as range migration, were also first introduced in this field.
+
+Since then, range migration has been extended and adapted to many imaging fields such as synthetic aperture radar (SAR) by Cafforio et al. [], microwave holography [], and, most recently, 3D imaging using millimeter-wave technology on which this work is based. In place of a 2D array of antennas, their system uses a scanned linear array of antennas and forms images at the rate of 1-2s per frame. Our achieved framerates of 75 frames per second are due to the combination of electronically switched 2D array of antennas, and a fully distributed algorithm running on a massively parallel system. 
 
 - Three-Dimensional Millimeter-Wave Imaging for Concealed Weapon Detection
 - 3-D Radar Imaging Using Range Migration Techniques
