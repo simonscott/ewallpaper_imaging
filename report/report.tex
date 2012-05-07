@@ -367,14 +367,13 @@ For operation above ground, in an isotropic medium such as air, a number of simp
 
 Both \cite{lopez20003} and \cite{3d-imaging-concealed-weapon} extend the 2D range migration algorithm to 3D for processing the received responses from a stepped-frequency linear array of antennas. Neither of the presented algorithms are parallelized however. \cite{lopez20003} computes one $61\times61\times61$ voxel frame per 1 to 3 minutes, and \cite{3d-imaging-concealed-weapon} computes a $127\times512\times64$ voxel frame in 10 seconds. Our achieved framerate of 75 frames per second are due to a combination of using an electronically switched 2D array of antennas, and a fully distributed algorithm running on a massively parallel system.
 
+Liang et al \cite{near-field-3d-stolt} built a near-field radar using single moving antenna. It took many hours to image the scene and the algorithm was not distributed for parallel processing. They do however propose an alternative to traditional Stolt interpolation, called cell averaging, that they claim provides better interpolation accuracy.
+
 Ralston, Charvat and Peabody \cite{thru-wall-mimo} built an imaging radar for looking through walls, based on the original SAR range-migration algorithm \cite{sar-data-focussing}. Although their algorithm was accelerated using GPUs to deliver 70 frames per second, it used only a linear array of antennas, and hence was only able to produce 2D images.
 
-- 3D FFT's on 2D ring topologies
-- Matrix transpose on 1D array using systolic arrays \cite{systolic-arrays-transpose}
+An alternative approach to the row-wise and column-wise transposes described in our paper is presented by O'Leary \cite{systolic-arrays-transpose}, who proposes the use of systolic arrays for performing a matrix transpose within a linear array.
 
 On the applications side, it has been shown that a human's heartrate and respiration can be detected wirelessly at a range of 0.5m, using a 2.4GHz radar with a low-gain antenna \cite{bioradar}. While the computational algorithm is very different to SAR, the hardware is the same, making the addition of such functionality to eWallpaper appear promising.
-
-- near-field 3D SAR imaging
 
 \section{Conclusion}
 - Conclude.
