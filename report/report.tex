@@ -6,7 +6,7 @@
 \pagestyle{empty}
 \setlength{\textwidth}{7in}
 \setlength{\textheight}{9.125in}
-\setlength{\columnsep}{0.5in}
+\setlength{\columnsep}{0.3in}
 \setlength{\topmargin}{-0.8in}
 \setlength{\oddsidemargin}{-0.25in}
 \setlength{\parindent}{5 ex}
@@ -355,9 +355,89 @@ The fully-distributed pattern represents communication for the algorithm describ
 
 \section{Performance Results}
 
-Fully-distributed pattern selected as optimal. Used for rest of performance analysis.
+Our algorithm is represented by the fully distributed pattern where all computation and data is evenly distributed amongst the processors. Figure \ref{time vs comm pattern} shows the time it takes to compute a single frame for each communication pattern. The red part of the bart represents time spent computing and the blue part represents communication. The fully distributed pattern is quite clearly the fastest, requiring just 13 milliseconds per frame. The only other pattern able to deliver realtime video framerates is the $16\times16$ cluster. The patterns containing very few processors are extremely slow due to high computational load on each processor. For example, the single node pattern takes over 8 seconds to compute a single frame.
 
-Include breakdown of memory usage.
+\begin{figure}[!h]
+\centering
+\includegraphics*[width=0.4\textwidth]{figures/chart5.pdf}
+\caption{Time vs. Communication Pattern}
+\label{time vs comm pattern}
+\end{figure}
+
+Figure \ref{mem vs comm pattern} shows the peak required memory per node for the different communication patterns. Since each processor has only 100KB of local memory available, the only viable patterns are the Fully Distributed and 16x16 Cluster.
+
+\begin{figure}[!h]
+\centering
+\includegraphics*[width=0.4\textwidth]{figures/chart6.pdf}
+\caption{Memory vs. Communication Pattern}
+\label{mem vs comm pattern}
+\end{figure}
+
+Figure \ref{framerate vs resolution} shows that as the antenna array becomes larger (x axis), the framerate (shown on the y-axis) decreases due to the increased communication. At our planned resolution of $128\times128$ antennas, we achieve 75 frames per second. Realtime video framerates can still be achieved up to an array width of 256 antennas corresponding to an image resolution of $256\times256\times512$ voxels. Furthermore, the curve from the network simulator very closely matches the curve from the timing model.
+
+\begin{figure}[!h]
+\centering
+\includegraphics*[width=0.4\textwidth]{figures/chart7.pdf}
+\caption{Framerate vs. Resolution}
+\label{framerate vs resolution}
+\end{figure}
+
+Figure \ref{speedup vs resolution} shows that at our resolution of $128\times128$, our fully distributed algorithm is 600 times faster than the single node serial implementation.
+
+\begin{figure}[!h]
+\centering
+\includegraphics*[width=0.4\textwidth]{figures/chart9.pdf}
+\caption{Chart 9}
+\label{speedup vs resolution}
+\end{figure}
+
+Figure \ref{cpu breakdown vs resolution} shows the ratio of communication and computation time at different antenna array sizes. As the array size increases, the execution time becomes increasingly dominated by communication costs.
+
+\begin{figure}[!h]
+\centering
+\includegraphics*[width=0.4\textwidth]{figures/chart2.pdf}
+\caption{Chart 2}
+\label{cpu breakdown vs resolution}
+\end{figure}
+
+Figure \ref{framerate vs bandwidth} shows the achievable framerate at different link bandwidths as well as the resulting CPU load. The achievable framerate, and resulting CPU utilization, are shown by the top curve and bottom curve respectively. At our proposed link bandwidth of 1Gbps, the achieved framerate of 75 fps results in a CPU utilization of 0.03. As the bandwidth increases, the communication time decreases, resulting in a higher framerate and better CPU utilization. A minimum bandwidth of 250 Mbps is required to achieve realtime framerates of 25 frames per second.
+
+\begin{figure}[!h]
+\centering
+\includegraphics*[width=0.4\textwidth]{figures/chart10.pdf}
+\caption{Chart 10}
+\label{framerate vs bandwidth}
+\end{figure}
+
+The previous graphs assumed that the FFT, Stolt, and Backwards Propagation coefficients were precomputed. If these are instead calculated as required, figure \ref{precomputation} shows that the memory usage can be decreased to 16KB per node. The added computation causes only a small decrease in framerate.
+
+\begin{figure}[!h]
+\centering
+\includegraphics*[width=0.4\textwidth]{figures/chart4.pdf}
+\caption{Chart 4}
+\label{precomputation}
+\end{figure}
+
+\begin{figure}[!h]
+\centering
+\includegraphics*[width=0.4\textwidth]{figures/chart8.pdf}
+\caption{Chart 8}
+\label{comm_patterns_arrows}
+\end{figure}
+
+\begin{figure}[!h]
+\centering
+\includegraphics*[width=0.4\textwidth]{figures/chart1.pdf}
+\caption{Chart 1}
+\label{chart1}
+\end{figure}
+
+\begin{figure}[!h]
+\centering
+\includegraphics*[width=0.4\textwidth]{figures/chart3.pdf}
+\caption{Chart 3}
+\label{comm_patterns_arrows}
+\end{figure}
 
 \section{Related Work}
 
@@ -376,8 +456,11 @@ An alternative approach to the row-wise and column-wise transposes described in 
 On the applications side, it has been shown that a human's heartrate and respiration can be detected wirelessly at a range of 0.5m, using a 2.4GHz radar with a low-gain antenna \cite{bioradar}. While the computational algorithm is very different to SAR, the hardware is the same, making the addition of such functionality to eWallpaper appear promising.
 
 \section{Conclusion}
-- Conclude.
+We developed a functional simulator for eWallpaper applications. From the simulation of the application, a timing model and network simulator were created. These allow the performance of applications running on the actual eWallpaper to be predicted. Our parallel imaging algorithm achieves realtime video framerates with feasible memory and bandwidth requirements.
 
+The next step is to build a FPGA-based hardware prototype of the eWallpaper. This prototype will allow our imaging algorithm to be tested  in real life.
+
+- Conclude.
 - Future Work.
  - Build HW prototype
  - Make row/column transpose twice as fast
