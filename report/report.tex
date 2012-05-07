@@ -152,7 +152,7 @@ The whole algorithm is then given as follows:
 The reconstructed image, $s(x,y,z)$, is a 3D array whose values represent the reflectivity at each point the room.
 
 \section{Implementation on a 2D Mesh Network}
-\section{algorithm-implementation}
+\label{algorithm-implementation}
 
 A single sheet of eWallpaper contains 16384 low-power Rocket processors, arranged in a 128 x 128 array. Since the wires between processors are printed using conductive inks, only nearest-neighbor connections can be formed. This results in a 2D mesh network of bi-directional links.
 
@@ -361,10 +361,11 @@ Include breakdown of memory usage.
 
 \section{Related Work}
 
-The ?experimental setup? for performing imaging using a 2D array of transceivers originated in the field of seismic data processing. Controlled explosions, and later frequency-swept oscillators, were used to emit a pulse from the surface of the earth. The reflected pulses were recorded, and detailed images of the subterranean structures were formed. Techniques for improving computational efficiency, such as range migration, were also first introduced in this field.
+The concept of using a 2D array of controlled emitters and receivers for imaging originated in the field of seismic data processing. In that field, controlled explosions were used to emit a pulse from the surface of the earth. The reflected pulses were recorded and processed to form detailed images of subterranean structures. The range migration algorithm (RMA) and Stolt interpolation were two imaging techniques that were developed in this field. In recent years, stepped-frequency oscillators, so called ``controlled sources'', were introduced in place of explosives for emitting the imaging pulses. Our radio transceivers play a similar role as these sources. While emitters for seismic imaging typically operate at frequencies on the order of _ Hz we plan to operate at frequencies centering _ GHz.
 
-Since then, range migration has been extended and adapted to many imaging fields such as synthetic aperture radar (SAR) by Cafforio et al. [], microwave holography [], and, most recently, 3D imaging using millimeter-wave technology on which this work is based. In place of a 2D array of antennas, their system uses a scanned linear array of antennas and forms images at the rate of 1-2s per frame. Our achieved framerates of 75 frames per second are due to the combination of electronically switched 2D array of antennas, and a fully distributed algorithm running on a massively parallel system. 
+For operation above ground, in an isotropic medium such as air, a number of simplifying assumptions can be made to simplify the original range migration algorithm. Cafforio et al. [] was first to adapt RMA to the field of synthetic aperture radar (SAR). In their work, the imaging satellite travels along a linear path, and uses a wide-spectrum "chirp" signal to produce a 2D image of the Earth's surface. Although their algorithm produces a 2D image, the simplifying assumptions are identical to ours and the algorithm is equivalent except for the lack of an additional spatial axis.
 
+Both [] and [] extend the 2D range migration algorithm to 3D for processing the received responses from a stepped-frequency linear array of antennas. Neither of the presented algorithms are parallelized however. [] computes one $61\times61\times61$ voxel frame per 1 to 3 minutes, and [] computes a $127\times512\times64$ voxel frame in 10 seconds. Our achieved framerate of 75 frames per second are due to a combination of using an electronically switched 2D array of antennas, and a fully distributed algorithm running on a massively parallel system.
 Ralston, Charvat and Peabody \cite{thru-wall-mimo} built an imaging radar for looking through walls, based on the original SAR range-migration algorithm \cite{sar-data-focussing}. Although their algorithm was accelerated using GPUs to deliver 70 frames per second, it used only a linear array of antennas, and hence was only able to produce 2D images.
 
 - FFT's on ring topologies
@@ -379,7 +380,11 @@ On the applications side, it has been shown that a human's heartrate and respira
 - concealed weapons
 - original SAR paper
 - near-field 3D SAR imaging
+- realtime through-wall imaging
+- FFT's on ring topologies
+- Matrix transpose on 1D array using systolic arrays \cite{systolic-arrays-transpose}
 
+- Applications: heart rate monitoring for Olympics
 
 \section{Conclusion}
 - Conclude.
