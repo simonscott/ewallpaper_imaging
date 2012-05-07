@@ -355,7 +355,11 @@ The fully-distributed pattern represents communication for the algorithm describ
 
 \section{Performance Results}
 
-Our algorithm is represented by the fully distributed pattern where all computation and data is evenly distributed amongst the processors. Figure \ref{time vs comm pattern} shows the time it takes to compute a single frame for each communication pattern. The red part of the bart represents time spent computing and the blue part represents communication. The fully distributed pattern is quite clearly the fastest, requiring just 13 milliseconds per frame. The only other pattern able to deliver realtime video framerates is the $16\times16$ cluster. The patterns containing very few processors are extremely slow due to high computational load on each processor. For example, the single node pattern takes over 8 seconds to compute a single frame.
+The time taken to reconstruct a single frame for each communication pattern, as determined by the network simulator, is shown in Figure \ref{time vs comm pattern}. The lower half of each bar (shown in blue) represents the time that each processor spends communicating with its neighbors, while the upper half (shown in red) represents the average time spent computing. The fully distributed pattern is the fastest, requiring just 13 milliseconds per frame. The only other pattern able to deliver video framerates is the $16\times16$ cluster. 
+
+The graph highlights the communication versus computation tradeoff inherent to each communication pattern. 
+The communication patterns that have large numbers of processors actively involved in the computation are dominated by communication time, such as the Fully Distributed pattern which spends 96\% communicating.
+In contrast, the communication patterns with small numbers of processors are dominated by computation time, such as the Single Node pattern which spends 97\% computing.
 
 \begin{figure}[!h]
 \centering
@@ -364,7 +368,9 @@ Our algorithm is represented by the fully distributed pattern where all computat
 \label{time vs comm pattern}
 \end{figure}
 
-Figure \ref{mem vs comm pattern} shows the peak required memory per node for the different communication patterns. Since each processor has only 100KB of local memory available, the only viable patterns are the Fully Distributed and 16x16 Cluster.
+Figure \ref{mem vs comm pattern} shows the peak required memory per node for the different communication patterns. The larger the number of active processors in the pattern, the less memory the required memory per active node. Since each processor has only 100KB of local memory available, the only viable patterns are the Fully Distributed and 16x16 Cluster. 
+
+Since the fully distributed pattern is the fastest and requires the least memory, it shall be selected as the pattern of choice for the distributed range migration algorithm. All further analysis therefore assumes the use of the fully distributed pattern.
 
 \begin{figure}[!h]
 \centering
@@ -373,7 +379,7 @@ Figure \ref{mem vs comm pattern} shows the peak required memory per node for the
 \label{mem vs comm pattern}
 \end{figure}
 
-Figure \ref{framerate vs resolution} shows that as the antenna array becomes larger (x axis), the framerate (shown on the y-axis) decreases due to the increased communication. At our planned resolution of $128\times128$ antennas, we achieve 75 frames per second. Realtime video framerates can still be achieved up to an array width of 256 antennas corresponding to an image resolution of $256\times256\times512$ voxels. Furthermore, the curve from the network simulator very closely matches the curve from the timing model.
+Figure \ref{framerate vs resolution} shows that as we increase the width of the antenna array, and hence distribute the data amongst more processors, the framerate decreases due to the increased communication. Note that in all the experiments  we constrain the number of frequencies to be twice the antenna array width. At our planned resolution of $128\times128$ antennas times 256 frequencies, we achieve 75 frames per second. Video framerates can still be achieved up to an array width of 256 antennas, corresponding to an image resolution of $256\times256\times512$ voxels. Furthermore, the results from the network simulator very closely match the predictions from the timing model.
 
 \begin{figure}[!h]
 \centering
@@ -382,7 +388,7 @@ Figure \ref{framerate vs resolution} shows that as the antenna array becomes lar
 \label{framerate vs resolution}
 \end{figure}
 
-Figure \ref{speedup vs resolution} shows that at our resolution of $128\times128$, our fully distributed algorithm is 600 times faster than the single node serial implementation.
+Figure \ref{speedup vs resolution} shows the speedup of the fully distributed pattern over the single node pattern for a range of antenna array widths. As previously discussed, the fully distributed pattern is dominated by communication costs, while the single node pattern is is dominated by computation costs. The communication costs for the fully distributed pattern is $O(N^2)$ as the amount of data stored in each row of processors is proportional to $N^2$, where $N$ is the antenna array width. The computation costs for the single node pattern is $O(N^3 \log(N))$, as $O(N^2)$ 1D FFTs must be performed, each with a computation cost of $O(N\log(N))$. Therefore as $N$ increases, the computational costs for the single node pattern increases at a faster rate than the communication costs for the fully distributed pattern resulting in the upward curve. At the planned antenna array width of 128, the fully distributed algorithm is 600 times faster than the single node serial implementation.
 
 \begin{figure}[!h]
 \centering
@@ -391,7 +397,7 @@ Figure \ref{speedup vs resolution} shows that at our resolution of $128\times128
 \label{speedup vs resolution}
 \end{figure}
 
-Figure \ref{cpu breakdown vs resolution} shows the ratio of communication and computation time at different antenna array sizes. As the array size increases, the execution time becomes increasingly dominated by communication costs.
+Figure \ref{cpu breakdown vs resolution} shows the ratio of communication to computation time for each processor at different antenna array widths. As the array width increases, the execution time becomes increasingly dominated by communication costs. This is because the communication time is $O(N^2)$, as explained above, while the time to compute the FFT per node is $O(N\log(N))$.
 
 \begin{figure}[!h]
 \centering
@@ -400,7 +406,9 @@ Figure \ref{cpu breakdown vs resolution} shows the ratio of communication and co
 \label{cpu breakdown vs resolution}
 \end{figure}
 
-Figure \ref{framerate vs bandwidth} shows the achievable framerate at different link bandwidths as well as the resulting CPU load. The achievable framerate, and resulting CPU utilization, are shown by the top curve and bottom curve respectively. At our proposed link bandwidth of 1Gbps, the achieved framerate of 75 fps results in a CPU utilization of 0.03. As the bandwidth increases, the communication time decreases, resulting in a higher framerate and better CPU utilization. A minimum bandwidth of 250 Mbps is required to achieve realtime framerates of 25 frames per second.
+Figure \ref{framerate vs bandwidth} shows the achievable framerate at different link bandwidths, as well as the resulting CPU utilization. The achievable framerate is shown by the top curve, and resulting CPU utilization, by the bottom curve. As the bandwidth increases, the communication time decreases, resulting in higher framerates and CPU utilization. A minimum bandwidth of 250 Mbps is required to achieve 25 frames per second, which we regard as the minimum framerate required for video imaging.
+
+At our proposed link bandwidth of 1Gbps, the achieved framerate of 75 fps results in a CPU utilization of 0.03. The low CPU utilization factor allows other compute-bound processes, such as image analysis and operating system tasks, to run during the communication phases of the algorithm. 
 
 \begin{figure}[!h]
 \centering
@@ -409,7 +417,16 @@ Figure \ref{framerate vs bandwidth} shows the achievable framerate at different 
 \label{framerate vs bandwidth}
 \end{figure}
 
-The previous graphs assumed that the FFT, Stolt, and Backwards Propagation coefficients were precomputed. If these are instead calculated as required, figure \ref{precomputation} shows that the memory usage can be decreased to 16KB per node. The added computation causes only a small decrease in framerate.
+The memory requirements per node for the fully distributed algorithm is detailed in Figure \ref{mem requirements}. 52\% of the memory is used for network buffers, 18\% for storing antenna responses and intermediate results, and 30\% for storing precomputed FFT, Stolt, and back propagation coefficients.
+
+\begin{figure}[!h]
+\centering
+\includegraphics*[width=0.4\textwidth, viewport = 80 25 540 370]{figures/chart3.pdf}
+\caption{Chart 3}
+\label{mem requirements}
+\end{figure}
+
+If the FFT, Stolt, and back propagation coefficients are no longer precomputed but rather calculated as required, Figure \ref{precomputation} shows that the memory usage can be decreased to 16KB per node. The added computation causes only a small decrease in framerate.
 
 \begin{figure}[!h]
 \centering
@@ -418,34 +435,13 @@ The previous graphs assumed that the FFT, Stolt, and Backwards Propagation coeff
 \label{precomputation}
 \end{figure}
 
-\begin{figure}[!h]
-\centering
-\includegraphics*[width=0.4\textwidth]{figures/chart8.pdf}
-\caption{Chart 8}
-\label{comm_patterns_arrows}
-\end{figure}
-
-\begin{figure}[!h]
-\centering
-\includegraphics*[width=0.4\textwidth]{figures/chart1.pdf}
-\caption{Chart 1}
-\label{chart1}
-\end{figure}
-
-\begin{figure}[!h]
-\centering
-\includegraphics*[width=0.4\textwidth]{figures/chart3.pdf}
-\caption{Chart 3}
-\label{comm_patterns_arrows}
-\end{figure}
-
 \section{Related Work}
 
-The concept of using a 2D array of controlled emitters and receivers for imaging originated in the field of seismic data processing. In that field, controlled explosions were used to emit a pulse from the surface of the earth. The reflected pulses were recorded and processed to form detailed images of subterranean structures. The range migration algorithm (RMA) and Stolt interpolation were two imaging techniques that were developed in this field (see \cite{gazdag1984migration} for an in-depth survey). In recent years, stepped-frequency oscillators, so called ``controlled sources'', were introduced in place of explosives for emitting the imaging pulses. Our radio transceivers play a similar role as these sources. While emitters for seismic imaging typically operate at frequencies on the order of \_ Hz we plan to operate at frequencies centering \_ GHz.
+The concept of using a 2D array of controlled emitters and receivers for imaging originated in the field of seismic data processing. In that field, controlled explosions were used to emit a pulse from the surface of the earth. The reflected pulses were recorded and processed to form detailed images of subterranean structures. The range migration algorithm (RMA) and Stolt interpolation were two imaging techniques that were developed in this field (see \cite{gazdag1984migration} for an in-depth survey). In recent years, stepped-frequency oscillators, so called ``controlled sources'', were introduced in place of explosives for emitting the imaging pulses. Our radio transceivers play a similar role as these sources. 
 
 For operation above ground, in an isotropic medium such as air, a number of simplifying assumptions can be made to simplify the original range migration algorithm. Cafforio et al. \cite{sar-data-focussing} was first to adapt RMA to the field of synthetic aperture radar (SAR). In their work, the imaging satellite travels along a linear path, and uses a wide-spectrum "chirp" signal to produce a 2D image of the Earth's surface. Although their algorithm produces a 2D image, the simplifying assumptions are identical to ours and the algorithm is equivalent except for the lack of an additional spatial axis.
 
-Both \cite{lopez20003} and \cite{3d-imaging-concealed-weapon} extend the 2D range migration algorithm to 3D for processing the received responses from a stepped-frequency linear array of antennas. Neither of the presented algorithms are parallelized however. \cite{lopez20003} computes one $61\times61\times61$ voxel frame per 1 to 3 minutes, and \cite{3d-imaging-concealed-weapon} computes a $127\times512\times64$ voxel frame in 10 seconds. Our achieved framerate of 75 frames per second are due to a combination of using an electronically switched 2D array of antennas, and a fully distributed algorithm running on a massively parallel system.
+Both \cite{lopez20003} and \cite{3d-imaging-concealed-weapon} extend the 2D range migration algorithm to 3D for processing the received responses from a stepped-frequency linear array of antennas. Neither of the presented algorithms are parallelized however. \cite{lopez20003} computes one $61\times61\times61$ voxel frame every 1 to 3 minutes, and \cite{3d-imaging-concealed-weapon} computes a $127\times512\times64$ voxel frame in 10 seconds. Our achieved framerate of 75 frames per second are due to a combination of using an electronically switched 2D array of antennas, and a fully distributed algorithm running on a massively parallel system.
 
 Liang et al \cite{near-field-3d-stolt} built a near-field radar using single moving antenna. It took many hours to image the scene and the algorithm was not distributed for parallel processing. They do however propose an alternative to traditional Stolt interpolation, called cell averaging, that they claim provides better interpolation accuracy.
 
@@ -456,20 +452,14 @@ An alternative approach to the row-wise and column-wise transposes described in 
 On the applications side, it has been shown that a human's heartrate and respiration can be detected wirelessly at a range of 0.5m, using a 2.4GHz radar with a low-gain antenna \cite{bioradar}. While the computational algorithm is very different to SAR, the hardware is the same, making the addition of such functionality to eWallpaper appear promising.
 
 \section{Conclusion}
-We developed a functional simulator for eWallpaper applications. From the simulation of the application, a timing model and network simulator were created. These allow the performance of applications running on the actual eWallpaper to be predicted. Our parallel imaging algorithm achieves realtime video framerates with feasible memory and bandwidth requirements.
 
-The next step is to build a FPGA-based hardware prototype of the eWallpaper. This prototype will allow our imaging algorithm to be tested  in real life.
+We developed a distributed implementation of the range migration algorithm for 3D radar imaging. The implementation was optimized for the 2D mesh network present on the eWallpaper. A general-purpose functional simulator for eWallpaper applications was developed for testing the imaging algorithm. From these simulations, a timing model and network simulator were created that can accurately predict the performance of applications on the eWallpaper. The timing model and network simulator showed that our distributed imaging algorithm achieves video framerates with feasible memory and bandwidth requirements.
 
-- Conclude.
-- Future Work.
- - Build HW prototype
- - Make row/column transpose twice as fast
- - Investigate more efficient 2D and 3D FFTs
-
+A remaining optimization is to halve the inter-processor traffic using the technique outlined in the Ring Exchange Algorithm \cite{efficient-transposition}. We are also currently in the process of building an FPGA-based hardware prototype of the eWallpaper. This will allow our imaging algorithm to be tested in realtime with actual radio transceivers.
+ 
 \subsection*{Acknowledgements}
-SWARM lab?
-Kurt?
 
+We thank Prof. Demmel, Prof. Kubiatowicz, Prof. Wawrzynek, Prof. Keutzer, and the members of the eWallpaper Working Group at UC Berkeley, for their valuable advice and helpful discussions.
 
 {\small
 \bibliographystyle{IEEEtran}
