@@ -152,6 +152,7 @@ The whole algorithm is then given as follows:
 The reconstructed image, $s(x,y,z)$, is a 3D array whose values represent the reflectivity at each point the room.
 
 \section{Implementation on a 2D Mesh Network}
+\section{algorithm-implementation}
 
 A single sheet of eWallpaper contains 16384 low-power Rocket processors, arranged in a 128 x 128 array. Since the wires between processors are printed using conductive inks, only nearest-neighbor connections can be formed. This results in a 2D mesh network of bi-directional links.
 
@@ -321,22 +322,21 @@ T & = & 6 \times (\text{send\_left\_right} + \text{receive\_and\_forward}) + \\
 \end{array}
 \]
 }
+\normalsize
 
 \subsection{Network Simulator}
 
-To perform a detailed investigation of the communication patterns, we developed a discrete-event simulator that accurately models the network traffic on the eWallpaper.
+A discrete-event simulator was developed to help analyze the effect of inter-processor communication on algorithm performance. The simulator maintains an event queue for each processor in the network. Whenever communication occurs between two neighboring processors, the following events are enqueued at both processors:
+\begin{enumerate}
+\item Transmission of the packet head at the sender
+\item Transmission of the packet tail at the sender
+\item Reception of the packet head at the receiver
+\item Reception of the packet tail at the receiver
+\item Transmission and reception of acknowledgement messages
+\item Buffer overflows and underflow
+\end{enumerate}
 
-The simulated events include:
-1. pkt send
-2. pkt head and tail receive
-3. pkt acks and retries
-4. buffer full and empty events
-
-Worked by having event queue for each node. Whenever comm occurred between neighbors, appropriate event added to queues for both nodes.
-
-To accurately predict the performance of the algorithm on the actual eWallpaper hardware, the expected wallpaper bandwidth and latency parameters were used in modeling the events.
-
-Simulator allowed effect of bandwidth, array size, latency and amount of precomputation on performance (framerate, cpu util and memory usage) to be determined. Also allows number of difference comm patterns to be investigated. Figure~\ref{comm_patterns_arrows} shows the different patterns that were investigated. Green arrows shows movement of data before alg starts. Red shows where data is located at end of computation.
+The network simulator allows the effect that bandwidth, latency and antenna array size have on framerate, cpu utilization and memory usage to be determined. Since the actual bandwidth and latency that we expect to see on the eWallpaper were used in these simulations, the simulation results should match closely with the actual eWallpaper network performance. The network simulator was also used to investigate the performance of different communication patterns, as shown in Figure~\ref{comm_patterns_arrows}. In this diagram, the arrows indicate the migration of data to the processors that are actively involved in the computation (the red-shaded blocks).
 
 \begin{figure}[!h]
 \centering
@@ -345,7 +345,13 @@ Simulator allowed effect of bandwidth, array size, latency and amount of precomp
 \label{comm_patterns_arrows}
 \end{figure}
 
-The single-node pattern is the simplest. All processors forward their echo data to single node. This node runs sequential version of algorithm without any communication. In the single-column pattern, all processors... TODO
+The single-node pattern is the simplest. All processors forward their local data to single node, which then processes all the data using a sequential range migration algorithm. Once all the data is on the processing node, no more communication occurs, and all other processors are idle. 
+
+Under the single-column pattern, each processor sends it data left until it reaches the processor at the beginning of the row. All computation is then done by the processors in the left-most column. These processors only need to communicate with each other when performing a column-wise transpose.
+
+In the cluster pattern, all data is sent to a small cluster of processors in the center of the array. This cluster then performs all the computation. Since the cluster of processors is small, the number of network hops required to perform a row-wise or column-wise transpose is small.
+
+The fully-distributed pattern represents communication for the algorithm described in Section \ref{algorithm-implementation}. All data and computation is evenly distributed amongst the nodes. The row-wise and column-wise transpose operations involves all processors in the row or column.
 
 \section{Performance Results}
 
@@ -359,19 +365,21 @@ The ?experimental setup? for performing imaging using a 2D array of transceivers
 
 Since then, range migration has been extended and adapted to many imaging fields such as synthetic aperture radar (SAR) by Cafforio et al. [], microwave holography [], and, most recently, 3D imaging using millimeter-wave technology on which this work is based. In place of a 2D array of antennas, their system uses a scanned linear array of antennas and forms images at the rate of 1-2s per frame. Our achieved framerates of 75 frames per second are due to the combination of electronically switched 2D array of antennas, and a fully distributed algorithm running on a massively parallel system. 
 
+Ralston, Charvat and Peabody \cite{thru-wall-mimo} built an imaging radar for looking through walls, based on the original SAR range-migration algorithm \cite{sar-data-focussing}. Although their algorithm was accelerated using GPUs to deliver 70 frames per second, it used only a linear array of antennas, and hence was only able to produce 2D images.
+
+- FFT's on ring topologies
+- Matrix transpose on 1D array using systolic arrays \cite{systolic-arrays-transpose}
+
+On the applications side, it has been shown that a human's heartrate and respiration can be detected wirelessly at a range of 0.5m, using a 2.4GHz radar with a low-gain antenna \cite{bioradar}. While the computational algorithm is very different to SAR, the hardware is the same, making the addition of such functionality to eWallpaper appear promising.
+
 - Three-Dimensional Millimeter-Wave Imaging for Concealed Weapon Detection
 - 3-D Radar Imaging Using Range Migration Techniques
 - SAR Data Focusing Using Seismic Migration Techniques
-- Mention that one group accelerated a version of the 2D algorithm using GPUs. Not 3D though.
 
 - concealed weapons
 - original SAR paper
 - near-field 3D SAR imaging
-- realtime through-wall imaging
-- FFT's on ring topologies
-- Matrix transpose on 1D array using systolic arrays \cite{systolic-arrays-transpose}
 
-- Applications: heart rate monitoring for Olympics
 
 \section{Conclusion}
 - Conclude.
