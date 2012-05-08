@@ -37,32 +37,29 @@ University of California, Berkeley
 \subsection*{\centering Abstract}
 \vspace*{-3mm}
 \textit{
-eWallpaper is a smart wallpaper containing thousands of embedded, low-power processors and radio transceivers. An important application of the wallpaper is to use the radio transceivers to perform 3D imaging using synthetic aperture radar (SAR) techniques. The major obstacles to implementing these techniques on the wallpaper are the distribution of the data amongst the large number of processors, the restrictive 2D mesh topology and the limited local memory on each processor. Our major contribution is a distributed and memory efficient implementation of the 3D imaging algorithm that operates in realtime and achieves video framerates. A hardware simulator was built to allow rapid development and verification of eWallpaper applications. This simulator was parallelized using MPI and Pthreads, enabling fast simulation on a high-performance computing cluster. We developed a performance model and network traffic simulator to verify that our distributed algorithm meets the framerate and memory requirements when running on the actual eWallpaper hardware.
+eWallpaper is a smart wallpaper containing thousands of embedded, low-power processors and radio transceivers. An important application of the wallpaper is to use the radio transceivers to perform 3D radar imaging. The major obstacles in implementing the imaging algorithm on the wallpaper are the distribution of the data amongst the large number of processors, the restrictive 2D mesh topology, and the limited local memory available to each processor. Our major contribution is a distributed and memory efficient implementation of the 3D range migration algorithm that operates in realtime and achieves video framerates. A hardware simulator was built to allow rapid development and verification of eWallpaper applications. This simulator was parallelized using MPI and Pthreads, enabling fast emulation on a high-performance computing cluster. We developed a performance model and network traffic simulator to verify that our distributed algorithm will meet the framerate and memory requirements while running on the actual eWallpaper hardware.
 }
 \section{Introduction}
 
-eWallpaper is a smart wallpaper with thousands of low-power, RISC-V \cite{riscv} processors embedded within the paper. These processors are connected in a 2D mesh network, spaced 25mm apart. Each processor has its own radio transceiver and antenna.
-
-One of the main objectives of the eWallpaper is to use the radio transceivers to image the room. The radios attached to each of the processors transmit millimeter-wave pulses. These pulses reflect off the objects in the room and the echoes are recorded back at the antennas. The echoes are combined using techniques borrowed from synthetic aperture radar to form a single three-dimensional image of the room.
+eWallpaper is a smart wallpaper with thousands of low-power, RISC-V \cite{riscv} processors embedded within the paper. These processors are connected in a 2D mesh network, spaced 25mm apart. Each processor has its own radio transceiver and antenna. One of the main objectives of eWallpaper is to use the radio transceivers to image the room. The radios attached to each of the processors transmit microwave pulses. These pulses reflect off the objects in the room and the echoes are recorded back at the transmitting antennas. The echoes are combined using an adapted version of the range migration algorithm \cite{lopez20003} to form a single three-dimensional image of the room.
 
 \subsection{Applications of the eWallpaper Imaging System}
 
-While being able to use wallpaper to form 3D images of a room is interesting, basic imaging is not the final goal of the eWallpaper. It is instead a technology that enables other high-level functions possible, such as:
-
+The ability to form 3D images of the room enables a number of useful applications, such as:
 \begin{itemize}
-\item Gesture recognition, allowing people to control the automated functions and multimedia in their homes.
-\item Monitoring of human vital signs and requesting medical assistance when, for example, a person is immobile on the floor.
-\item Tracking of persons without the house for security purposes. Gurbuz et al \cite{human-recognition} describe a technique for identifying people using radar signals.
-\item Creation of immersive audio fields for teleconferencing \cite{immersive-audio} that follow people as they walk around
+\item gesture recognition, enabling users to control home appliances, lighting, and multimedia systems via an intuitive interface.
+\item pervasive monitoring of human vital signs and automatic notification of medical personnel in case of emergencies.
+\item human recognition and tracking throughout the house for security purposes. Gurbuz et al. \cite{human-recognition} describe a technique for identifying people using radar signals.
+\item creation of immersive audio fields for teleconferencing \cite{immersive-audio} that track the positions of human speakers and listeners.
 \end{itemize}
 
 \subsection{Challenges with Performing Realtime Imaging}
 
-The proposed design for a single sheet of eWallpaper consists of an array of 128 x 128 antennas and processors, with each processor storing 256 echoes. These echoes are then  combined to form a three-dimensional image of room using the 3D Range Migration Algorithm \cite{3d-imaging-concealed-weapon}, which has been adapted from synthetic aperture radar (SAR) techniques. There are three key challenges to implementing this algorithm on eWallpaper:
+The proposed design for eWallpaper consists of an array of $128\times128$ processors, each with an attached radio transceiver and antenna. Each processor records the responses detected at its antenna. These responses are combined to form a three-dimensional image of the room using the 3D range migration algorithm (RMA). There are three key challenges to implementing 3D RMA on eWallpaper:
 \begin{enumerate}
-\item The recorded antenna responses are distributed amongst the 128 x 128 processors. This means that the algorithm must too be distributed.
-\item Moving data between processors can be expensive, due to the low-dimensional network topology (2D mesh).
-\item The amount of available memory on each processor is extremely limited, on the order of 100KB. Furthermore, there is no global memory storage. This means that the echoes cannot all be sent to a single processor for computation.
+\item The antenna responses are distributed amongst the $128\times128$ processors. Therefore, to achieve high performance, the algorithm must also be distributed.
+\item In order to achieve high performance on the low-dimensional 2D mesh network, interprocessor communication requiring many network hops must be minimized.
+\item The amount of local memory on each processor is extremely limited, on the order of 100KB. Furthermore, there is no global memory storage. This means that no single processor can store all the antenna responses.
 \end{enumerate}
 
 Taking these limitations into account, we developed a distributed implementation of the 3D range migration algorithm that is both memory efficient and able to achieve video framerates.
@@ -70,45 +67,47 @@ Taking these limitations into account, we developed a distributed implementation
 \section{The 3D Range Migration Algorithm}
 \label{algorithm-section}
 
-The algorithm we adapted for performing 3D range migration is identical to the one presented in [] for 3D imaging using millimeter waves. The input to the algorithm is a 3D array of amplitudes and phase offsets recorded by the radio transceivers which is used to compute the reflectivity of every point in the scene. 
+The algorithm presented in \cite{lopez20003} for 3D microwave imaging was adapted for implementation on eWallpaper. Here we present the underlying theory and physical model. 
 
-During the scanning procedure, a single radio antenna will emit a continuous sinusoidal wave. The wave will reflect off of the objects in the room and is received by a radio transceiver located beside the transmitting antenna. The amplitude of the received sin wave and the phase offset between the transmitted and received wave are recorded. This procedure is repeated over a range of evenly spaced frequencies and for each antenna in turn. In our setup, we have 128$\times$128 antennas, each of which scan through 256 frequencies, thus the input to the imaging algorithm is 128$\times$128$\times$256 amplitudes and phase offsets.
+During the scanning procedure, a single radio antenna will emit a continuous sinusoidal wave. The wave will reflect off the objects in the room and is received by a radio transceiver. The transmit and receive antennas are sufficiently close that they can be assumed to be colocated, as in the case of a quasi-monostatic radar. The amplitude of the received sine wave and the phase difference between the transmitted and received wave are recorded. For each antenna in turn, this procedure is repeated over a range of evenly spaced frequencies. 
 
-We will assume, in the development of the algorithm, that the speed of light is known and constant for all points in the scene, i.e. that there is negligible difference between the speed of light in human tissue and in air. We also do not consider any diffraction, refraction, or attenuation effects. We will model the scene as a collection of discrete point targets distributed uniformly throughout the region to be imaged. Each point target, at position $(x,y,z)$, is fully described by a single coefficient, $0 \leq r \leq 1$, which represents its reflectivity. The sin wave emitted by a radio antenna is assumed to travel, unimpeded, to all points in the scene. They reflect off the targets and arrive back at the radio transceiver with amplitude $r$. The superposition of the reflected waves from each target is recorded by the radio transceiver. This physical model is minimal but is sufficient for the purposes of imaging.
+In our setup, we have 128$\times$128 antennas, each of which step through 256 frequencies. Thus the input to the imaging algorithm is a 3D array of 128$\times$128$\times$256 amplitudes and phase differences.
+
+We will assume, in the development of the algorithm, that the speed of light is known and constant for all points in the scene. We also do not consider any refraction or attenuation effects. We will model the scene as a collection of discrete point targets distributed uniformly throughout the imaged region. Each point target, at position $(x,y,z)$, is fully described by a single real number, $0 \leq r \leq 1$, which represents its reflectivity. A unit-amplitude sine wave emitted by a radio antenna is assumed to travel, unimpeded, to all points in the scene. It reflects off the targets and arrives back at the radio transceiver with amplitude $r$. The superposition of the reflected waves from each target is recorded by the radio transceiver. This physical model is minimal but is sufficient for the purposes of imaging.
 
 \begin{figure}[!h]
 \centering
 \includegraphics*[width=0.3\textwidth]{figures/antenna.pdf}
-\caption{Geometric layout of antenna plane and a single point target.}
+\caption{Geometric layout of antenna plane and a single point target}
 \label{antenna}
 \end{figure}
 
-Formally, consider a single antenna at position $(x', y', 0)$. Let $d = \sqrt{(x'-x)^2+(y'-y)^2+z^2}$ be the distance from the antenna to a target at position $(x,y,z)$ (Figure \ref{antenna}). The time it takes for the sin wave emitted by the antenna to travel to the target and back again is $t = \frac{2d}{c}$, where $c$ is the speed of light. In that time, the phase of the transmitted sin wave has advanced by $\phi = \omega t$, where $\omega$ is the angular frequency of the sin wave. The sin wave received by the transceiver can be represented as a single complex number, $r e^{-j \phi}$, where the amplitude of the wave is represented by the magnitude, and the phase offset is represented by the angle. Thus, the final received signal at the transceiver, from the superposition of the reflected waves from each point target, is given by
+Formally, consider a single antenna at position $(x', y', 0)$. Let $d = \sqrt{(x'-x)^2+(y'-y)^2+z^2}$ be the distance from the antenna to a target at position $(x,y,z)$ (Figure \ref{antenna}). The time taken for the sine wave, emitted by the antenna, to travel to the target and back again is $t = \frac{2d}{c}$, where $c$ is the speed of light. In that time, the phase of the transmitted sine wave has advanced by $\phi = \omega t$, where $\omega$ is the angular frequency. The amplitude of the sine wave received by the transceiver and the phase difference between the transmitted and received sine waves can be represented as a single complex number, $r e^{-j \phi}$, where the amplitude of the wave is represented by the magnitude, and the phase difference is represented by the angle. Thus, the final received signal at the transceiver, which is the superposition of the reflected waves from each point target, is given by
 %
 \begin{gather}
-s(x', y', z=0, \omega) = \int \int \int r(x,y,z) e^{j \phi(x,y,z)} dx dy dz \nonumber \\
-= \int \int \int r(x,y,z) e^{j \frac{2}{c} \sqrt{(x'-x)^2 + (y'-y)^2 + z^2}} dx dy dz.
+s(x', y', z=0, \omega) = \int \int \int r(x,y,z) e^{-j \phi(x,y,z)} dx dy dz \nonumber \\
+= \int \int \int r(x,y,z) e^{-j \frac{2\omega}{c} \sqrt{(x'-x)^2 + (y'-y)^2 + z^2}} dx dy dz.
 \end{gather}
 
-The received signal has, thus far, been described as the superposition of the reflections from each point target of a sin wave originally emitted by the antenna. Alternatively, we can equivalently interpret the point targets to be, themselves, emitting sin waves which travel at half the speed of light, $\frac{c}{2}$, to arrive at the transceiver. Under this interpretation, the scene generates a wavefield, $s(x,y,z,\omega)$, and the transceivers sample the wavefield on the plane $z=0$ to obtain $s(x,y,z=0,\omega)$. Our goal is to recover the full wavefield, $s(x,y,z,\omega)$ given only $s(x,y,z=0,\omega)$.
+The received signal has, thus far, been described as the superposition of the reflections from each point target. Alternatively, we can equivalently interpret the point targets to be, themselves, emitting sine waves which travel at half the speed of light, $\frac{c}{2}$, towards the transceiver. Under this interpretation, the scene generates a wavefield, $s(x,y,z,\omega)$, and the transceivers sample the wavefield on the plane $z=0$ to obtain $s(x,y,z=0,\omega)$. Our goal is to recover the full wavefield, $s(x,y,z,\omega)$ given only $s(x,y,z=0,\omega)$.
 
-The wavefield at depth $z$ can be recovered by back propagating the recorded wavefield, $s(x, y, z=0, \omega)$, from the antenna to the target. This can be achieved by simply swapping the sign of the phase delay term, which represents propagation backwards in time, and summing over the contribution from each antenna.
+The wavefield at depth $z$ can be recovered by back propagating the recorded wavefield, $s(x, y, z=0, \omega)$, from the antenna to the target. This can be achieved by simply swapping the sign of the phase delay term, thus representing propagation backwards in time, and summing over the contribution from each antenna.
 %
 \begin{gather}
-s(x,y,z,\omega) =\int\int s(x',y',z=0,\omega) \nonumber \\
-e^{-j \omega \frac{2}{c} \sqrt{(x'-x)^{2}+(y'-y)^{2}+z^{2}}} dx'dy'.
+s(x,y,z,\omega) =\int\int s(x',y',z=0,\omega) \cdot \nonumber \\
+e^{j \omega \frac{2}{c} \sqrt{(x'-x)^{2}+(y'-y)^{2}+z^{2}}} dx'dy'
 \end{gather}
 %
-After backwards propagation, the final 3D image can be reconstructed by integrating the wavefield over all frequencies.
+After back propagation, the final 3D image can be reconstructed by integrating the wavefield over all frequencies.
 \begin{equation}
-s(x,y,z)=\int s(x,y,z,\omega) d\omega.
+s(x,y,z)=\int s(x,y,z,\omega) d\omega
 \end{equation}
 
-While the above algorithm is intuitive, the need to integrate over all frequencies and antenna positions for each scene position makes computation prohibitively expensive. For 128$\times$128 antennas and 256 frequencies, it took over two and a half hours on a 24 node cluster to image a room. To make computation tractable, we pre-transform our received signal to the frequency domain, where we will do all our computations, and then transform back to the spatial domain.
+While the above algorithm is intuitive, integrating over all frequencies and antenna positions, for each point in the scene, makes computation prohibitively expensive. For 128$\times$128 antennas and 256 frequencies, it took over two and a half hours on a 24 core cluster to image a room. To make computation tractable, we pre-transform our received signal to the frequency domain, where we will do all our computations, and then transform back to the spatial domain.
 
-Let $S(k_x,k_y,z=0,\omega) = \text{FT}_{x,y} \{ s(x, y, z=0, \omega) \}$ be the Fourier transform of the recorded wavefield with respect to $x$ and $y$. Back propagation becomes an efficient element-wise multiplication in the frequency domain.
+Let $S(k_x,k_y,z=0,\omega) = \text{FT}_{x,y} \{ s(x, y, z=0, \omega) \}$ be the Fourier transform of the recorded wavefield with respect to $x$ and $y$. Back propagation becomes an efficient element-wise multiplication in the spatial frequency domain.
 \begin{equation}
-	S(k_x, k_y, z, \omega) = S(k_x, k_y, z=0, \omega) e^{-j k_z z},
+	S(k_x, k_y, z, \omega) = S(k_x, k_y, z=0, \omega) e^{j k_z z},
 \end{equation}
 where
 \begin{equation}
@@ -117,7 +116,7 @@ where
 
 The image in the frequency domain is reconstructed, as before, by integrating the back propagated field over all frequencies.
 \begin{equation}
-	S(k_x, k_y, z) = \int S(k_x, k_y, z=0, \omega) e^{-j k_z z} d\omega. \label{eq:stolt-integral}
+	S(k_x, k_y, z) = \int S(k_x, k_y, z=0, \omega) e^{j k_z z} d\omega. \label{eq:stolt-integral}
 \end{equation}
 Finally, we use the inverse Fourier transform to recover the image in the spatial domain, $s(x,y,z) = \text{IFT}_{k_x, k_y} \{ S(k_x, k_y, z) \}$. 
 
@@ -129,63 +128,63 @@ By resampling $S(k_x, k_y, z=0, \omega)$ at evenly spaced intervals of $k_z$ (a 
 \end{equation}
 the integral in equation \ref{eq:stolt-integral} can be efficiently computed using an inverse FFT. Resampling may be done using linear interpolation.
 \begin{gather}
-	S(k_x, k_y, z) = \int S(k_x, k_y, z=0, \omega) e^{-j k_z z} d\omega 	\nonumber \\
-	= \int S'(k_x, k_y, z=0, k_z) e^{-j k_z z} dk_z	\nonumber \\
-	= \text{IFT}_{k_z} \{ S'(k_x, k_y, z=0, k_z) e^{-j k_z z_0} \},
+	S(k_x, k_y, z) = \int S(k_x, k_y, z=0, \omega) e^{j k_z z} d\omega 	\nonumber \\
+	= \int S'(k_x, k_y, z=0, k_z) e^{j k_z z} dk_z	\nonumber \\
+	= \text{IFT}_{k_z} \{ S'(k_x, k_y, z=0, k_z) e^{j k_z z_0} \},
 \end{gather}
 where $z_0$ is the minimum distance from the antenna plane that we wish to image.
 
-The whole algorithm is then given as follows:
-1. Pre-transform the received signal to the frequency domain using a FFT.
+The whole algorithm is then given as follows: \\
+1. Pre-transform the received signal to the spatial frequency domain using a 2D FFT.
 \begin{equation}
-	S(k_x,k_y,z=0,\omega) = \text{FT}_{x,y} \{ s(x, y, z=0, \omega) \}.
+	S(k_x,k_y,z=0,\omega) = \text{FT}_{x,y} \{ s(x, y, z=0, \omega) \}
 \end{equation}
-2. Perform back propagation and image reconstruction in the frequency domain, using Stolt interpolation.
+2. Perform Stolt interpolation and back propagation in the spatial frequency domain.
 \begin{gather}
 	S(k_x, k_y, z) = 	\nonumber \\
-	\text{IFT}_{k_z} \{ \text{Stolt}\{ S(k_x, k_y, z=0, \omega) \} e^{-j k_z z_0} \}.
+	\text{IFT}_{k_z} \{ \text{Stolt}\{ S(k_x, k_y, z=0, \omega) \} e^{j k_z z_0} \}
 \end{gather}
-3. Transform the reconstructed image back to the spatial domain using an IFFT.
+3. Transform the reconstructed image back to the spatial domain using a 2D IFFT.
 \begin{equation}
-	s(x, y, z) = \text{IFT}_{k_x, k_y} \{ S(k_x, k_y, z) \}.
+	s(x, y, z) = \text{IFT}_{k_x, k_y} \{ S(k_x, k_y, z) \}
 \end{equation}
 The reconstructed image, $s(x,y,z)$, is a 3D array whose values represent the reflectivity at each point the room.
 
 \section{Implementation on a 2D Mesh Network}
 \label{algorithm-implementation}
 
-A single sheet of eWallpaper contains 16384 low-power Rocket processors, arranged in a 128 x 128 array. Since the wires between processors are printed using conductive inks, only nearest-neighbor connections can be formed. This results in a 2D mesh network of bi-directional links.
+A single sheet of eWallpaper contains 16384 low-power Rocket processors, arranged in a $128\times128$ array. The interprocessor network on eWallpaper is formed from a single layer of printed wires, and thus is restricted to low-dimensional topologies. Thus, bi-directional links connect each eWallpaper processor to only its four immediate neighbors resulting in a 2D mesh network.
 
-The Rocket processor is based on the RISC-V \cite{riscv} ISA. It has a 6-stage, in-order pipeline, running at 1GHz. It also has an additional floating-point unit, capable of approximately 200 MFlops/s. Each processor has a 64KB L1 cache and 100KB of on-chip main memory. There is therefore no DRAM and no off-processor memory in the eWallpaper.
+The Rocket processor is a 6-stage, in-order processor, based on the RISC-V \cite{riscv} ISA, with a clock speed of 1GHz. It has a 64KB L1 cache, 100KB of on-chip main memory, and a floating-point unit capable of approximately 200 MFlops/s. There is no additional off-processor memory in eWallpaper.
 
-In order to implement the imaging algorithm described in Section~\ref{algorithm-section} on the eWallpaper, two important operations need to be defined: the row-wise transpose and the column-wise transpose.
+The implementation of the imaging algorithm described in Section~\ref{algorithm-section} on eWallpaper relies upon two fundamental operations: the row-wise transpose and the column-wise transpose.
 
 \subsection{The Row-wise Transpose}
 
-Assuming there are P processors in a row in the mesh network, each containing N data values, the values stored on a single processor $q$ can be expressed as:
-\[ D_q = \{d_{q1}, d_{q2}, d_{q3}, ..., d_{qN}\} \]
-After performing the row-wise transpose, the values stored on processor $q$ are:
-\[ D_q = \{d_{1q}, d_{2q}, d_{3q}, ..., d_{Nq}\} \]
-Therefore, after the transpose, the $q^{th}$ processor in the row contains the $q^{th}$ value stored by all the processors before the transpose.
+Assuming there are N processors in each row of the mesh network, with each processor containing M data values, the values stored on processor $n \in \{1 \ldots N\}$ can be expressed as:
+\[ D_n = \{d_{n1}, d_{n2}, d_{n3}, ..., d_{nM}\}. \]
+After performing the row-wise transpose, the values stored on processor $n$ are:
+\[ D_n = \{d_{1n}, d_{2n}, d_{3n}, ..., d_{Mn}\}. \]
+Therefore, after the transpose, the $n^{th}$ processor in the row contains the $n^{th}$ value stored by each processor before the transpose.
 
-The 3D matrix on the left of Figure~\ref{row_wise_transpose} represents a 3x3 processor array, with each processor storing the magnitude and phase values for 3 frequencies(represented by the 3 circles at each processor). In order to perform a row-wise transpose, each processor first sends its locally stored data to its left and right neighbors. Once the transmission has completed, each processor receives a complete packet from its left neighbor. It extracts the required value from this packet (the $q^{th}$ processor extracts the $q^{th}$ value from the packet) and forwards the packet to the right neighbor. Similarly, it receives and packet from its right neighbor, extracts a value, and forwards the packet to the left neighbor. In this way, a full row-wise transpose can be performed in $P-1$ hops for a row of $P$ processors.
+Figure~\ref{row_wise_transpose} shows an example of a row-wise transpose on a $3\times3$ processor array. The array before the transpose is shown on the left of the figure, with each processor storing the antenna responses for 3 frequencies (represented by 3 circles at each processor). In order to perform the row-wise transpose, every processor first sends its locally stored data to its left and right neighbors. Once its own data has been sent, each processor waits to receive the complete packet from its left neighbor. The processor extracts the required value from this packet and forwards the packet onto its right neighbor. Processor $n$ will extract the $n^{th}$ value from the packet. Similarly, the processor will receive a packet from its right neighbor, extract the required value, and forward the packet onto its left neighbor. In this way, a full row-wise transpose can be performed in $N-1$ hops for a row of $N$ processors.
 
 \begin{figure}[!h]
 \centering
 \includegraphics*[width=0.5\textwidth, viewport = 10 10 620 150]{figures/row_wise_transpose.pdf}
-\caption{A 3x3 processor array, before and after the row-wise transpose}
+\caption{A 3x3 processor array, before (left) and after (right) the row-wise transpose}
 \label{row_wise_transpose}
 \end{figure}
 
-The 3D matrix on the right of Figure~\ref{row_wise_transpose} shows the data stored in each processor after the transpose. The processors in the first column store the first frequency values, the processors in the second column the second frequency values, etc. Note that during the row-wise transpose operation, only processors in the same row communicate. This allows all rows to be transposed at the same time.
+The array on the right of Figure~\ref{row_wise_transpose} shows the data stored in each processor after the transpose. The processors in the first column store the first frequency values, the processors in the second column store the second frequency values, etc. Note that during the row-wise transpose operation, interprocessor communication occurs only between processors in the same row. This allows all rows to be transposed at the same time.
 
-This is very similar to the Ring Exchange Algorithm described by Christara et al \cite{efficient-transposition} for ring networks. Christara et al argue that store and forward is better than wormhole routing for the transposition operation on a ring network, as each processor requires data from all other processors. Furthermore, they prove that this approach is optimal for a ring network, as it performs the transpose in $P-1$ hops.
+This is similar to the Ring Exchange Algorithm described by Christara et al. \cite{efficient-transposition} for ring networks. Christara et al. argue that store and forward is better than wormhole routing for the transposition operation on a ring network, as each processor requires data from all other processors. Furthermore, they prove that this approach is optimal for ring networks, as it performs the transpose in $N-1$ hops, where $N$ is the number of nodes.
 
-The one difference between the Ring Exchange Algorithm and our row-wise transpose is that the processors, in our approach, forward the entire packet after extracting the required values, while the processors in the Ring Exchange Algorithm only forward the values that they do not require. The result is that our approach incurs twice the total bandwidth cost as the Ring Exchange Algorithm.
+Note that in our row-wise transpose, each processor forwards the entire original packet after extracting the required values. In the Ring Exchange Algorithm, each processor \emph{removes} the values it requires from the packet before forwarding. The result is that our approach incurs twice the total bandwidth cost as the Ring Exchange Algorithm.
 
 \subsection{The Column-wise Transpose}
 
-The column-wise transpose, shown in Figure~\ref{column_wise_transpose}, works in the same way as the row-wise transpose, except that processors in the same column communicate.
+The column-wise transpose, shown in Figure~\ref{column_wise_transpose}, operates in a similar fashion to the row-wise transpose, except that each processor communicates with the other processors in the same column, instead of the same row.
 
 \begin{figure}[!h]
 \centering
@@ -196,7 +195,7 @@ The column-wise transpose, shown in Figure~\ref{column_wise_transpose}, works in
 
 \subsection{The Distributed 3D Imaging Algorithm}
 
-With the row-wise and column-wise transpose operations defined, the imaging algorithm described in Section~\ref{algorithm-section} can be defined as a sequence of computation and communication steps, as in Figure~\ref{algorithm_labeled}. These operations are performed concurrently, but not necessarily in synchronization, on all processors in the network. The yellow boxes in the diagram represent computational operations, while the grey boxes represent communication.
+With the row-wise and column-wise transpose operations defined, the imaging algorithm described in Section~\ref{algorithm-section} can be expressed as a sequence of computation and communication steps, as shown in Figure~\ref{algorithm_labeled}. These operations run on each processor in the network. The yellow boxes in the diagram represent computational operations, while the grey boxes represent communication.
 
 \begin{figure}[!h]
 \centering
@@ -205,37 +204,39 @@ With the row-wise and column-wise transpose operations defined, the imaging algo
 \label{algorithm_labeled}
 \end{figure}
 
-The 2D FFT across the entire dataset, with respect to $x$ and $y$, is computed as a set of 1D FFTs along the $x$-axis, followed by a set of 1D FFTs along the $y$-axis. At the start of the algorithm, each processor contains the echoes that were recorded at its own antenna, for each of the 256 frequency steps. A row-wise transpose is performed, with the result being that each processor contains the echoes at all 128 $x$ positions for just two frequencies. The processor then performs two 128-point 1D FFTs on the locally stored data. This is followed by a column-wise transpose, so that each processor now contains the echo data at all 128 $y$ positions, for a particular $kx$ value and just two frequencies. Finally, each processor once again performs two 128-point 1D FFTs on locally stored data, completing the 2D FFT.
+At the start of the algorithm, each processor contains the responses recorded at its own antenna, for each of the 256 frequency steps. The 2D FFT across the entire dataset, with respect to $x$ and $y$, is computed as a set of 1D FFTs along the $x$-axis, followed by a set of 1D FFTs along the $y$-axis. The first step in the 2D FFT is a row-wise transpose, resulting in each processor storing the responses at all 128 $x$ positions for two frequencies. The processor then performs two 128-point 1D FFTs on the locally stored data. This is followed by a column-wise transpose, resulting in each processor now containing the responses at all 128 $y$ positions, for a particular $k_x$ value and two frequencies. Finally, each processor once again performs two 128-point 1D FFTs on locally stored data, completing the 2D FFT.
 
-After the 2D FFT, a row-wise transpose is performed, with the result being that each processor contains all 256 frequency values for a particular $kx$ and $ky$. The processor is now able to perform a backward propagation and Stolt interpolation on locally stored data, without needing to communicate with any other processors. The backward propagation involves multiplying each stored value by a unique complex number. Stolt interpolation is achieved using linear interpolation. Both the back propagation coefficients and the linear interpolation indices are precomputed to accelerate computation.
+After the 2D FFT, a row-wise transpose is performed, placing all 256 frequency values for a particular $k_x$ and $k_y$ at each processor. The processor is now able to perform back propagation and Stolt interpolation on locally stored data, without further communication. Back propagation involves multiplying each stored value by a unique complex number. Stolt interpolation is achieved using linear interpolation. Both the back propagation coefficients and the linear interpolation indices are precomputed to accelerate computation.
 
-The final 3D inverse FFT is implemented using three separate 1D IFFTs with interleaving row and column transposes. At the end of the algorithm, each processor contains the reflectivity at all 256 depths ($z$-values) at a particular $(x,y)$ position.
+The final 3D inverse FFT is implemented using three separate 1D inverse FFTs, with interleaving row and column transposes. At the end of the algorithm, each processor contains the reflectivity at all 256 depths, $z$, at a particular $(x,y)$ position.
 
 \section{High Performance Functional Simulator}
 
-To aid the development of the imaging algorithm, we created a functional simulator for fast prototyping and debugging of eWallpaper applications. eWallpaper applications are written in Single Program Multiple Data (SPMD) style, and one program instance is launched per simulated processor. Each processor knows its own coordinates on the eWallpaper processor grid, and has access to a set of minimal communication functions for sending and receiving data packets from its immediate neighbors. The simulator was parallelized to run efficiently on an MPI cluster. Within a MPI node, multiple virtual processors are simulated using Pthreads (see Figure \ref{mpi_sim}).
+To aid the development of the imaging algorithm, we created a functional simulator for fast prototyping and debugging of eWallpaper applications. eWallpaper applications are written in Single Program Multiple Data (SPMD) style, and one program instance is launched per simulated processor. Each simulated processor knows its own coordinates on the eWallpaper processor grid, and has access to a minimal set of communication functions for sending and receiving data packets from its immediate neighbors. In order to achieve fast emulation of a large number of processors, the simulator was parallelized to run on an MPI cluster. Within an MPI node, multiple virtual processors are simulated using Pthreads (see Figure \ref{mpi_sim}).
 
 \begin{figure}[!h]
 \centering
 \includegraphics*[width=0.3\textwidth]{figures/mpi_sim.pdf}
-\caption{Structural overview of MPI-based functional simulator.}
+\caption{Structural overview of MPI-based functional simulator}
 \label{mpi_sim}
 \end{figure}
 
 The following basic functions are provided for interprocessor communication:
 \begin{itemize}
-	\item \textbf{send\_message(direction, message, message\_size)} sends a message with the provided message size to one of the four neighboring processors.
+	\item \textbf{send\_message(direction, message, message\_size)} sends a message, of the specified message size, to one of the four neighboring processors.
 	\item \textbf{receive\_message(direction)} receives a message from one of the four neighboring processors. A pointer to the start of the message buffer is returned.
-	\item \textbf{set\_receive\_message(direction, buffer)} instructs the network router to place incoming packets in the provided buffer.
+	\item \textbf{set\_receive\_buffer(direction, buffer)} instructs the network router to place incoming packets in the provided buffer.
 \end{itemize}
 
-{\em send\_message} blocks until the network router is free to send and the receiving processor has space available to hold the message. Note that {\em send\_message} returns as soon as message transmission begins, {\em not} when message transmission is completed. {\em receive\_message} blocks until there is a message waiting in the network buffer. Within a single MPI node, network functions are simulated using shared memory and mutexes. Across MPI node boundaries, network functions are implemented on top of MPI Isend and Irecv operations. These MPI node boundaries are invisible to the eWallpaper application.
+{\em send\_message} blocks until the network router is free to send and the receiving processor has space available to hold the message. Note that {\em send\_message} returns as soon as message transmission begins, {\em not} when message transmission is completed. {\em receive\_message} blocks until there is a complete message waiting in the network buffer. 
 
-For computationally intensive applications, the simulator can be configured to run on more MPI nodes, with a smaller number of virtual processors being simulated on each node. For faster prototyping and debugging, we can use less MPI nodes by increasing the number of simulated virtual processors per node. In the limit, we can configure the simulator to simulate {\em all} the virtual processors on a single node allowing the entire simulation to be run on a single local machine. This feature was of great benefit to us during the development phase of the algorithm, allowing a much shorter edit-test-debug cycle by circumventing the lengthy job-queue system on Nersc. 
+Network functions for communication between virtual processors on the same MPI node are implemented using shared memory and mutexes. Across MPI node boundaries, eWallpaper network functions are implemented on top of MPI \emph{Isend} and \emph{Irecv} operations. These MPI node boundaries are invisible to the eWallpaper application.
+
+For computationally intensive applications, the simulator can be configured to run on more MPI nodes, with a smaller number of virtual processors per node. For faster prototyping and debugging, we can configure the simulator to emulate {\em all} the virtual processors on a single node. This allows the entire simulation to be run on a single laptop, hence avoiding the lengthy job-queue system on NERSC and enabling a shorter edit-test-debug cycle.
 
 \section{Simulated Imaging Results}
 
-Our distributed algorithm was tested on our functional simulator running on a 64 core cluster. Antenna responses were artificially generated given an input scene. Figure \ref{3_points_input} shows an input scene consisting of three points of varying reflectivities, the top-left point being the least reflective and the bottom-right point being the most reflective. Figure \ref{3_points_output} shows the reconstructed image output by our algorithm. The brightest object in the recovered image corresponds to the point with highest reflectivity. 
+Our distributed algorithm was tested on the functional simulator running on a 64 core cluster. Antenna responses were artificially generated for three different input scenes. Figure \ref{3_points_input} shows an input scene consisting of three points of varying reflectivities. The top-left point is the least reflective and the bottom-right point is the most reflective. Figure \ref{3_points_output} shows the scene that our algorithm reconstructed. The brightest object in the recovered image corresponds to the point with highest reflectivity. 
 
 \begin{figure}
 \begin{centering}
@@ -243,15 +244,15 @@ Our distributed algorithm was tested on our functional simulator running on a 64
 \subfloat[Input Scene]{
 	\includegraphics[bb=80bp 80bp 460bp 500bp,clip,height=4cm]{figures/3_points_input.png}
 	\label{3_points_input}}
-\subfloat[Reconstructed Image]{
+\subfloat[Reconstructed Scene]{
 	\includegraphics[bb=100bp 100bp 600bp 600bp,clip,height=4cm]{figures/3_points.png}
 	\label{3_points_output}}
 	
 \end{centering}
-\caption{Input scene with three points of different reflectivities.}
+\caption{Scene with three points of different reflectivities}
 \end{figure}
 
-Figure \ref{sphere_input} shows an input scene consisting of a collection of points distributed along the surface of a sphere. Figure \ref{sphere_output} shows that the sphere is correctly reconstructed by our algorithm. For figures \ref{skull_angle1} and \ref{skull_angle2}, the antenna responses are artificially generated from a set of points from the Stanford volume data archive obtained by a CT scan of a human head. The recovered 3D image of the head is shown from two different angles.
+Figure \ref{sphere_input} shows an input scene consisting of a collection of points distributed along the surface of a sphere. Figure \ref{sphere_output} shows that the sphere is correctly reconstructed by our algorithm. For Figure \ref{skull_angle1} and \ref{skull_angle2}, the antenna responses are artificially generated from a set of points taken from the Stanford volume data archive \cite{levoy1988display}, which was obtained from a CT scan of a human head. The recovered 3D image of the head is shown from two different angles.
 
 \begin{figure}
 \begin{centering}
@@ -259,38 +260,39 @@ Figure \ref{sphere_input} shows an input scene consisting of a collection of poi
 \subfloat[Input Scene]{
 	\includegraphics[bb=70bp 80bp 460bp 500bp,clip,height=4cm]{figures/sphere_input.png}
 	\label{sphere_input}}
-\subfloat[Reconstructed Image]{
+\subfloat[Reconstructed Scene]{
 	\includegraphics[bb=100bp 100bp 600bp 600bp,clip,height=4cm]{figures/sphere.png}
 	\label{sphere_output}}
 	
 \end{centering}
-\caption{Input scene with points distributed along sphere.}
+\caption{Scene with points distributed along a spherical surface}
 \end{figure}
 
 
 \begin{figure}
 \begin{centering}
 
-\subfloat[Reconstructed Image]{
+\subfloat[Reconstructed Scene]{
 	\includegraphics[bb=110bp 70bp 600bp 600bp,clip,height=4cm]{figures/skull4.png}
 	\label{skull_angle1}}
-\subfloat[Reconstructed Image]{
+\subfloat[Reconstructed Scene]{
 	\includegraphics[bb=100bp 70bp 600bp 600bp,clip,height=4cm]{figures/skull6.png}
 	\label{skull_angle2}}
 	
 \end{centering}
-\caption{Two angles of reconstructed scene from CT scan.}
+\caption{Two angles of the reconstructed scene from a CT scan}
 \end{figure}
 
 \section{Investigation of Design Parameters}
 
-While the functional simulator allowed us to verify the correctness of our distributed algorithm, it did not allow us to determine the speed of the algorithm on the eWallpaper. Since the functional simulator ran on a supercomputing cluster, using software threads to emulate eWallpaper processors, the performance of the functional simulator is not representative of what we can expect to see on the actual eWallpaper.
 
-The application code that ran on the functional simulator was therefore analyzed and a timing model was developed. This model, which is described below, showed us that the code spends more than 90\% of its time communicating. A network simulator was therefore also developed to allow us to investigate th effect of different communication patterns and network parameters on performance.
+While the functional simulator allowed us to verify the correctness of our distributed algorithm, it gave no measure of the projected performance of the algorithm on eWallpaper. To predict the performance, we developed a timing model of the application code running on the functional simulator. This model, which is described below, shows that the code spends more than 90\% of its time communicating. A network simulator was therefore also developed to aid investigation into the effects of different communication patterns and network parameters on performance.
  
 \subsection{Timing Model}
 
-We assume that the antennas are arranged in a square array, with $N_{ant}$ antennas along one side of the array (the total number of antennas is $N_{ant} \times N_{ant}$), and that each antenna steps through $N_f$ frequency steps. Let $B$ be the network bandwidth, $L$ the network latency from one processor to a neighbor, $T_M$ the time to load or store a complex floating point number, and $T_F$ the time to perform a floating-point arithmetic operation. Table~\ref{timing-model-table} shows the time for each of the main steps in the distributed imaging algorithm.
+We assume that there are $N_{ant}\times N_{ant}$ antennas arranged in a square array, and that each antenna steps through $N_f$ frequencies.
+
+ Let $B$ be the network bandwidth, $L$, the network latency from one processor to a neighbor, $T_M$, the time to load or store a complex floating point number, and $T_F$, the time to perform a floating-point arithmetic operation. Table~\ref{timing-model-table} shows the time taken by each of the main steps in the distributed imaging algorithm described in Section~\ref{algorithm-implementation}.
 
 \begin{table}[!h]
 \centering
@@ -309,7 +311,7 @@ stolt\_interpolation & $ N_f \times \left(10T_F + 4T_M \right) $ \\
 \label{timing-model-table}
 \end{table}
 
-By combining the times for individual operations with the complete algorithm, as depicted in Figure~\ref{algorithm_labeled}, the time to compute a complete image can be computed as:
+By combining the times for individual operations with the complete algorithm, as depicted in Figure~\ref{algorithm_labeled}, the time to compute a complete image can be expressed as:
 {\small
 \[
 \begin{array}{l l l}
@@ -326,17 +328,18 @@ T & = & 6 \times (\text{send\_left\_right} + \text{receive\_and\_forward}) + \\
 
 \subsection{Network Simulator}
 
-A discrete-event simulator was developed to help analyze the effect of inter-processor communication on algorithm performance. The simulator maintains an event queue for each processor in the network. Whenever communication occurs between two neighboring processors, the following events are enqueued at both processors:
+A discrete-event simulator was developed to help analyze the effect of interprocessor communication on algorithm performance. The simulator maintains an event queue for each processor in the network. Whenever communication occurs between two neighboring processors, one or more of the following events are enqueued at both processors:
 \begin{enumerate}
 \item Transmission of the packet head at the sender
 \item Transmission of the packet tail at the sender
 \item Reception of the packet head at the receiver
 \item Reception of the packet tail at the receiver
 \item Transmission and reception of acknowledgement messages
-\item Buffer overflows and underflow
+\item Buffer overflows and underflows
 \end{enumerate}
+To accurately predict the performance of the algorithm on the actual eWallpaper hardware, the expected wallpaper bandwidth and latency parameters were used in modeling the events. 
 
-The network simulator allows the effect that bandwidth, latency and antenna array size have on framerate, cpu utilization and memory usage to be determined. Since the actual bandwidth and latency that we expect to see on the eWallpaper were used in these simulations, the simulation results should match closely with the actual eWallpaper network performance. The network simulator was also used to investigate the performance of different communication patterns, as shown in Figure~\ref{comm_patterns_arrows}. In this diagram, the arrows indicate the migration of data to the processors that are actively involved in the computation (the red-shaded blocks).
+Using the network simulator, we can determine the effect that bandwidth, latency, and antenna array size have on framerate, CPU utilization, and memory usage. The network simulator was also used to investigate the performance of different communication patterns, as shown in Figure~\ref{comm_patterns_arrows}. In this diagram, the arrows indicate the migration of data to the processors that are actively involved in the computation (the red-shaded blocks).
 
 \begin{figure}[!h]
 \centering
@@ -345,64 +348,64 @@ The network simulator allows the effect that bandwidth, latency and antenna arra
 \label{comm_patterns_arrows}
 \end{figure}
 
-The single-node pattern is the simplest. All processors forward their local data to single node, which then processes all the data using a sequential range migration algorithm. Once all the data is on the processing node, no more communication occurs, and all other processors are idle. 
+The single-node pattern is the simplest. All processors forward their local data to a single node, which then processes all the data sequentially. Once all the data is on the processing node, no more communication occurs, and all other processors are idle. 
 
-Under the single-column pattern, each processor sends it data left until it reaches the processor at the beginning of the row. All computation is then done by the processors in the left-most column. These processors only need to communicate with each other when performing a column-wise transpose.
+Under the single-column pattern, each processor sends its data left until it reaches the left-most processor in its row. All computation is then done by the processors in the first column. These processors only need to communicate with each other when performing a column-wise transpose. Row-wise transposes can be done without communication.
 
-In the cluster pattern, all data is sent to a small cluster of processors in the center of the array. This cluster then performs all the computation. Since the cluster of processors is small, the number of network hops required to perform a row-wise or column-wise transpose is small.
+In the cluster pattern, all data is sent to a small cluster of processors in the center of the array. All the computation is then performed by this cluster. Since the cluster is small, row-wise and column-wise transposes can be performed with fewer network hops.
 
-The fully-distributed pattern represents communication for the algorithm described in Section \ref{algorithm-implementation}. All data and computation is evenly distributed amongst the nodes. The row-wise and column-wise transpose operations involves all processors in the row or column.
+The fully-distributed pattern represents communication for the algorithm described in Section \ref{algorithm-implementation}. All data and computation is evenly distributed amongst the processors. The row-wise and column-wise transpose operations involve all the processors in the row or column.
 
 \section{Performance Results}
 
 The time taken to reconstruct a single frame for each communication pattern, as determined by the network simulator, is shown in Figure \ref{time vs comm pattern}. The lower half of each bar (shown in blue) represents the time that each processor spends communicating with its neighbors, while the upper half (shown in red) represents the average time spent computing. The fully distributed pattern is the fastest, requiring just 13 milliseconds per frame. The only other pattern able to deliver video framerates is the $16\times16$ cluster. 
 
 The graph highlights the communication versus computation tradeoff inherent to each communication pattern. 
-The communication patterns that have large numbers of processors actively involved in the computation are dominated by communication time, such as the Fully Distributed pattern which spends 96\% communicating.
-In contrast, the communication patterns with small numbers of processors are dominated by computation time, such as the Single Node pattern which spends 97\% computing.
+The communication patterns that have large numbers of processors actively involved in the computation are dominated by communication time, such as the Fully Distributed pattern, which spends 96\% of its time communicating.
+In contrast, the communication patterns with small numbers of processors are dominated by computation time, such as the Single Node pattern, which spends 97\% of its time computing.
 
 \begin{figure}[!h]
 \centering
 \includegraphics*[width=0.4\textwidth]{figures/chart5.pdf}
-\caption{Time vs. Communication Pattern}
+\caption{Time vs. communication pattern}
 \label{time vs comm pattern}
 \end{figure}
 
-Figure \ref{mem vs comm pattern} shows the peak required memory per node for the different communication patterns. The larger the number of active processors in the pattern, the less memory the required memory per active node. Since each processor has only 100KB of local memory available, the only viable patterns are the Fully Distributed and 16x16 Cluster. 
+Figure \ref{mem vs comm pattern} shows the peak required memory per node for the different communication patterns. The larger the number of active processors in the pattern, the less the required memory per active node. Since each processor has only 100KB of local memory available, the only viable patterns are the Fully Distributed and 16x16 Cluster. 
 
-Since the fully distributed pattern is the fastest and requires the least memory, it shall be selected as the pattern of choice for the distributed range migration algorithm. All further analysis therefore assumes the use of the fully distributed pattern.
+Since the fully distributed pattern is the fastest and requires the least memory, it shall be selected as the pattern of choice for our distributed range migration algorithm. All further analysis therefore assumes the use of this pattern.
 
 \begin{figure}[!h]
 \centering
 \includegraphics*[width=0.4\textwidth]{figures/chart6.pdf}
-\caption{Memory vs. Communication Pattern}
+\caption{Memory vs. communication pattern}
 \label{mem vs comm pattern}
 \end{figure}
 
-Figure \ref{framerate vs resolution} shows that as we increase the width of the antenna array, and hence distribute the data amongst more processors, the framerate decreases due to the increased communication. Note that in all the experiments  we constrain the number of frequencies to be twice the antenna array width. At our planned resolution of $128\times128$ antennas times 256 frequencies, we achieve 75 frames per second. Video framerates can still be achieved up to an array width of 256 antennas, corresponding to an image resolution of $256\times256\times512$ voxels. Furthermore, the results from the network simulator very closely match the predictions from the timing model.
+Figure \ref{framerate vs resolution} shows that as we increase the width of the antenna array, and hence distribute the data amongst more processors, the framerate decreases due to the increased communication. Note that in all the experiments  we constrain the number of frequencies to be twice the antenna array width. At our planned resolution of 128 antennas $\times$ 128 antennas $\times$ 256 frequencies, we achieve 75 frames per second. Video framerates can still be achieved up to an array width of 256 antennas, corresponding to an image resolution of $256\times256\times512$ voxels. Furthermore, the results from the network simulator very closely match the predictions from the timing model.
 
 \begin{figure}[!h]
 \centering
 \includegraphics*[width=0.4\textwidth]{figures/chart7.pdf}
-\caption{Framerate vs. Resolution}
+\caption{Framerate vs. resolution}
 \label{framerate vs resolution}
 \end{figure}
 
-Figure \ref{speedup vs resolution} shows the speedup of the fully distributed pattern over the single node pattern for a range of antenna array widths. As previously discussed, the fully distributed pattern is dominated by communication costs, while the single node pattern is is dominated by computation costs. The communication costs for the fully distributed pattern is $O(N^2)$ as the amount of data stored in each row of processors is proportional to $N^2$, where $N$ is the antenna array width. The computation costs for the single node pattern is $O(N^3 \log(N))$, as $O(N^2)$ 1D FFTs must be performed, each with a computation cost of $O(N\log(N))$. Therefore as $N$ increases, the computational costs for the single node pattern increases at a faster rate than the communication costs for the fully distributed pattern resulting in the upward curve. At the planned antenna array width of 128, the fully distributed algorithm is 600 times faster than the single node serial implementation.
+Figure \ref{speedup vs resolution} shows the speedup of the fully distributed pattern over the single node pattern, for a range of antenna array widths. As previously discussed, the fully distributed pattern is dominated by communication costs, while the single node pattern is dominated by computation costs. The communication costs for the fully distributed pattern is $O(N^2)$ as the amount of data stored in each row of processors is proportional to $N^2$, where $N$ is the antenna array width. The computation costs for the single node pattern is $O(N^3 \log(N))$, as $O(N^2)$ 1D FFTs must be performed, each with a computation cost of $O(N\log(N))$. Therefore as $N$ increases, the computational costs for the single node pattern increases at a faster rate than the communication costs for the fully distributed pattern, resulting in the upward curve. At the planned antenna array width of 128, the fully distributed algorithm is 600 times faster than the single node serial implementation.
 
 \begin{figure}[!h]
 \centering
 \includegraphics*[width=0.4\textwidth]{figures/chart9.pdf}
-\caption{Chart 9}
+\caption{Parallel speedup vs. resolution}
 \label{speedup vs resolution}
 \end{figure}
 
-Figure \ref{cpu breakdown vs resolution} shows the ratio of communication to computation time for each processor at different antenna array widths. As the array width increases, the execution time becomes increasingly dominated by communication costs. This is because the communication time is $O(N^2)$, as explained above, while the time to compute the FFT per node is $O(N\log(N))$.
+Figure \ref{cpu breakdown vs resolution} shows the ratio of communication to computation time for each processor, at different antenna array widths. As the array width increases, the execution time becomes increasingly dominated by communication costs. This is because the communication time is $O(N^2)$, as explained above, while the time per node to compute the 1D FFT is $O(N\log(N))$.
 
 \begin{figure}[!h]
 \centering
 \includegraphics*[width=0.4\textwidth]{figures/chart2.pdf}
-\caption{Chart 2}
+\caption{Breakdown of CPU time vs. resolution}
 \label{cpu breakdown vs resolution}
 \end{figure}
 
@@ -413,7 +416,7 @@ At our proposed link bandwidth of 1Gbps, the achieved framerate of 75 fps result
 \begin{figure}[!h]
 \centering
 \includegraphics*[width=0.4\textwidth]{figures/chart10.pdf}
-\caption{Chart 10}
+\caption{Framerate and CPU load vs. bandwidth}
 \label{framerate vs bandwidth}
 \end{figure}
 
@@ -422,48 +425,45 @@ The memory requirements per node for the fully distributed algorithm is detailed
 \begin{figure}[!h]
 \centering
 \includegraphics*[width=0.4\textwidth, viewport = 80 25 540 370]{figures/chart3.pdf}
-\caption{Chart 3}
+\caption{Memory breakdown per node}
 \label{mem requirements}
 \end{figure}
 
-If the FFT, Stolt, and back propagation coefficients are no longer precomputed but rather calculated as required, Figure \ref{precomputation} shows that the memory usage can be decreased to 16KB per node. The added computation causes only a small decrease in framerate.
+If the FFT, Stolt, and back propagation coefficients are no longer precomputed, but rather calculated as required, Figure \ref{precomputation} shows that the memory usage can be decreased to 16KB per node. The added computation causes only a small decrease in framerate.
 
 \begin{figure}[!h]
 \centering
 \includegraphics*[width=0.4\textwidth]{figures/chart4.pdf}
-\caption{Chart 4}
+\caption{Effect of precomputation on framerate}
 \label{precomputation}
 \end{figure}
 
 \section{Related Work}
 
-The concept of using a 2D array of controlled emitters and receivers for imaging originated in the field of seismic data processing. In that field, controlled explosions were used to emit a pulse from the surface of the earth. The reflected pulses were recorded and processed to form detailed images of subterranean structures. The range migration algorithm (RMA) and Stolt interpolation were two imaging techniques that were developed in this field (see \cite{gazdag1984migration} for an in-depth survey). In recent years, stepped-frequency oscillators, so called ``controlled sources'', were introduced in place of explosives for emitting the imaging pulses. Our radio transceivers play a similar role as these sources. 
+2D arrays of controlled transmitters and receivers were first used for imaging in the field of seismic data processing. Controlled explosions were used to emit a pulse from the surface of the earth. The reflected pulses were recorded and processed to form detailed images of subterranean structures. 
 
-For operation above ground, in an isotropic medium such as air, a number of simplifying assumptions can be made to simplify the original range migration algorithm. Cafforio et al. \cite{sar-data-focussing} was first to adapt RMA to the field of synthetic aperture radar (SAR). In their work, the imaging satellite travels along a linear path, and uses a wide-spectrum "chirp" signal to produce a 2D image of the Earth's surface. Although their algorithm produces a 2D image, the simplifying assumptions are identical to ours and the algorithm is equivalent except for the lack of an additional spatial axis.
+The range migration algorithm (RMA) and Stolt interpolation were two imaging techniques that were developed in this field (see \cite{gazdag1984migration} for an in-depth survey). In recent years, the explosives were replaced with stepped-frequency oscillators, commonly known as {\em controlled sources}, for emitting the imaging pulses. The radio transceivers on eWallpaper perform a similar function as these sources. 
 
-Both \cite{lopez20003} and \cite{3d-imaging-concealed-weapon} extend the 2D range migration algorithm to 3D for processing the received responses from a stepped-frequency linear array of antennas. Neither of the presented algorithms are parallelized however. \cite{lopez20003} computes one $61\times61\times61$ voxel frame every 1 to 3 minutes, and \cite{3d-imaging-concealed-weapon} computes a $127\times512\times64$ voxel frame in 10 seconds. Our achieved framerate of 75 frames per second are due to a combination of using an electronically switched 2D array of antennas, and a fully distributed algorithm running on a massively parallel system.
+For operation in an isotropic medium such as air, a number of assumptions can be made to simplify the original range migration algorithm. Cafforio et al. \cite{sar-data-focussing} were first to adapt RMA to the field of synthetic aperture radar (SAR). Although their algorithm uses the linear motion of a satellite to produce 2D images of the Earth, the simplifying assumptions are identical to ours. Furthermore, the algorithm is equivalent to ours, except for the lack of an additional spatial axis.
 
-Liang et al \cite{near-field-3d-stolt} built a near-field radar using single moving antenna. It took many hours to image the scene and the algorithm was not distributed for parallel processing. They do however propose an alternative to traditional Stolt interpolation, called cell averaging, that they claim provides better interpolation accuracy.
+Both \cite{lopez20003} and \cite{3d-imaging-concealed-weapon} extend Cafforio's adaptation of RMA to three dimensions. They use the extended algorithm to process the received responses from a stepped-frequency, linear array of antennas. However, neither of the presented algorithms are parallelized. \cite{lopez20003} computes one frame, of $61\times61\times61$ voxels, in 1 minute, and \cite{3d-imaging-concealed-weapon} computes a frame, of $127\times512\times64$ voxels, in 10 seconds. Our achieved framerate of 75 frames per second is due to a combination of the electronically-switched 2D array of antennas, which eliminates the need for moving antennas, and a fully distributed algorithm running on a massively parallel system.
 
-Ralston, Charvat and Peabody \cite{thru-wall-mimo} built an imaging radar for looking through walls, based on the original SAR range-migration algorithm \cite{sar-data-focussing}. Although their algorithm was accelerated using GPUs to deliver 70 frames per second, it used only a linear array of antennas, and hence was only able to produce 2D images.
+Liang et al. \cite{near-field-3d-stolt} also extended Cafforio's adaptation of RMA and built a near-field radar using a single moving antenna. It took 8 hours to image the scene and the algorithm was not parallelized. They do, however, propose an alternative to traditional Stolt interpolation, called cell averaging, that they claim provides better interpolation accuracy.
 
-An alternative approach to the row-wise and column-wise transposes described in our paper is presented by O'Leary \cite{systolic-arrays-transpose}, who proposes the use of systolic arrays for performing a matrix transpose within a linear array.
+Ralston, Charvat and Peabody \cite{thru-wall-mimo} built an imaging radar for looking through walls, based on Cafforio's 2D algorithm. Although their algorithm was accelerated using GPUs to deliver 70 frames per second, it used only a linear array of antennas, and hence was only able to produce 2D images.
 
-On the applications side, it has been shown that a human's heartrate and respiration can be detected wirelessly at a range of 0.5m, using a 2.4GHz radar with a low-gain antenna \cite{bioradar}. While the computational algorithm is very different to SAR, the hardware is the same, making the addition of such functionality to eWallpaper appear promising.
+An alternative approach to the row-wise and column-wise transposes described in our paper is presented by O'Leary \cite{systolic-arrays-transpose}, who proposes the use of systolic arrays for performing a matrix transpose on a linear array of processors.
+
+On the applications side, it has been shown that a human's heartrate and respiration can be detected wirelessly at a range of 0.5m, using a 2.4GHz radar with a low-gain antenna \cite{bioradar}. While the computational algorithm is very different to RMA, the hardware is identical, making the addition of such functionality to eWallpaper appear promising.
 
 \section{Conclusion}
 
-We developed a distributed implementation of the range migration algorithm for 3D radar imaging. The implementation was optimized for the 2D mesh network present on the eWallpaper. A general-purpose functional simulator for eWallpaper applications was developed for testing the imaging algorithm. From these simulations, a timing model and network simulator were created that can accurately predict the performance of applications on the eWallpaper. The timing model and network simulator showed that our distributed imaging algorithm achieves video framerates with feasible memory and bandwidth requirements.
+We developed a distributed implementation of the range migration algorithm for 3D radar imaging. The implementation was optimized for the 2D mesh network present on eWallpaper. A general-purpose functional simulator for eWallpaper applications was developed for testing the imaging algorithm. From these simulations, a timing model and network simulator were created that can accurately predict the performance of eWallpaper applications. The timing model and network simulator showed that our distributed imaging algorithm achieves video framerates with feasible memory and bandwidth requirements.
 
-A remaining optimization is to halve the inter-processor traffic using the technique outlined in the Ring Exchange Algorithm \cite{efficient-transposition}. We are also currently in the process of building an FPGA-based hardware prototype of the eWallpaper. This will allow our imaging algorithm to be tested in realtime with actual radio transceivers.
- 
-\subsection*{Acknowledgements}
-
-We thank Prof. Demmel, Prof. Kubiatowicz, Prof. Wawrzynek, Prof. Keutzer, and the members of the eWallpaper Working Group at UC Berkeley, for their valuable advice and helpful discussions.
+A remaining optimization is to halve the interprocessor traffic using the technique outlined in the Ring Exchange Algorithm \cite{efficient-transposition}. We are also currently in the process of building an FPGA-based hardware prototype of eWallpaper. This will allow our imaging algorithm to be tested in realtime with actual radio transceivers.
 
 {\small
 \bibliographystyle{IEEEtran}
-\bibliography{bib}
-}
+\bibliography{bib}}
 
 \end{document}
