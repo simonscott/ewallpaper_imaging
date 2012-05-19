@@ -96,6 +96,7 @@ The wavefield at depth $z$ can be recovered by back propagating the recorded wav
 \begin{gather}
 s(x,y,z,\omega) =\int\int s(x',y',z=0,\omega) \cdot \nonumber \\
 e^{j \omega \frac{2}{c} \sqrt{(x'-x)^{2}+(y'-y)^{2}+z^{2}}} dx'dy'
+\label{sxyzw}
 \end{gather}
 %
 After back propagation, the final 3D image can be reconstructed by integrating the wavefield over all frequencies.
@@ -103,36 +104,82 @@ After back propagation, the final 3D image can be reconstructed by integrating t
 s(x,y,z)=\int s(x,y,z,\omega) d\omega
 \end{equation}
 
-While the above algorithm is intuitive, integrating over all frequencies and antenna positions, for each point in the scene, makes computation prohibitively expensive. For 128$\times$128 antennas and 256 frequencies, it took over two and a half hours on a 24 core cluster to image a room. To make computation tractable, we pre-transform our received signal to the frequency domain, where we will do all our computations, and then transform back to the spatial domain.
+While the above algorithm is intuitive, integrating over all frequencies and antenna positions, for each point in the scene, makes computation prohibitively expensive. For 128$\times$128 antennas and 256 frequencies, it took over two and a half hours on a 24 core cluster to image a room. 
 
-Let $S(k_x,k_y,z=0,\omega) = \text{FT}_{x,y} \{ s(x, y, z=0, \omega) \}$ be the Fourier transform of the recorded wavefield with respect to $x$ and $y$. Back propagation becomes an efficient element-wise multiplication in the spatial frequency domain.
-\begin{equation}
-	S(k_x, k_y, z, \omega) = S(k_x, k_y, z=0, \omega) e^{j k_z z},
-\end{equation}
+To make computation tractable, we rewrite equation \ref{sxyzw} by expressing the complex exponential term as a summation of plane waves
+\begin{gather}
+	s(x,y,z,\omega) = \int \int s(x', y', z=0, \omega) \cdot \nonumber \\
+	 \int \int e^{j k_x (x-x') + j k_y (y-y') + j k_z (z-z_0)} dk_x dk_y dx' dy' \nonumber \\
+%	 
+	 = \int \int \left\{ \int \int s(x', y', z=0, \omega) e^{-j k_x x' - j k_y y'} dx' dy' \right\} \cdot \nonumber \\
+	 e^{-j k_z z_0} e^{j k_x x + j k_y y + j k_z z} dk_x dk_y.
+	 \label{plane waves}
+\end{gather}
+The $z0$ in the above expression allows the antenna array to be at any position. The inner double integral can be recognized as the 2D Fourier transform of $s(x', y', z=0, \omega)$ with respect to $x', y'$. Therefore, we can rewrite equation \ref{plane waves} as
+\begin{gather}
+	s(x,y,z,\omega) = \int \int  S(k_x, k_y, \omega) e^{-j k_z z_0} \cdot \nonumber \\
+	e^{j k_x x + j k_y y + j k_z z} dk_x dk_y,
+\end{gather}
 where
 \begin{equation}
-  	k_z = \sqrt{ (\frac{2 \omega}{c}) ^ 2 - k_x^2 - k_y^2}.
+	 S(k_x, k_y, \omega) = \text{FT}_{2D}\left\{ s(x', y', z=0, \omega) \right\}.
 \end{equation}
 
-The image in the frequency domain is reconstructed, as before, by integrating the back propagated field over all frequencies.
-\begin{equation}
-	S(k_x, k_y, z) = \int S(k_x, k_y, z=0, \omega) e^{j k_z z} d\omega. \label{eq:stolt-integral}
-\end{equation}
-Finally, we use the inverse Fourier transform to recover the image in the spatial domain, $s(x,y,z) = \text{IFT}_{k_x, k_y} \{ S(k_x, k_y, z) \}$. 
-
-The pre and post Fourier transforms can be done efficiently using FFTs, and back propagation is a fast element-wise multiplication in the frequency domain. The only remaining integral at this point is given by equation \ref{eq:stolt-integral}, which as a further optimization, can be computed efficiently by noting that it has a similar form to the inverse Fourier transform. 
-
-By resampling $S(k_x, k_y, z=0, \omega)$ at evenly spaced intervals of $k_z$ (a technique known as Stolt interpolation in the seismic imaging field),
-\begin{equation}
-	S'(k_x, k_y, z=0, k_z) = \text{Stolt}\{ S(k_x, k_y, z=0, \omega) \},
-\end{equation}
-the integral in equation \ref{eq:stolt-integral} can be efficiently computed using an inverse FFT. Resampling may be done using linear interpolation.
+As before, the final image can be reconstructed by integrating over all frequencies
 \begin{gather}
-	S(k_x, k_y, z) = \int S(k_x, k_y, z=0, \omega) e^{j k_z z} d\omega 	\nonumber \\
-	= \int S'(k_x, k_y, z=0, k_z) e^{j k_z z} dk_z	\nonumber \\
-	= \text{IFT}_{k_z} \{ S'(k_x, k_y, z=0, k_z) e^{j k_z z_0} \},
+	s(x,y,z) = \int \int \int   S(k_x, k_y, \omega) \cdot \nonumber \\
+	e^{-j k_z z_0} e^{j k_x x + j k_y y + j k_z z} dk_x dk_y d\omega.
+	\label{sxyz}
 \end{gather}
-where $z_0$ is the minimum distance from the antenna plane that we wish to image.
+We now do a change of variables from $\omega$ to $k_z$ using the dispersion relation for plane waves
+\begin{gather}
+	k_z = \sqrt{ 4 (\frac{\omega}{c})^2 - k_x^2 - k_y^2 }
+\end{gather}
+
+
+Therefore equation \ref{sxyz} can be expressed in terms of $k_z$.
+\begin{gather}
+	s(x,y,z) = \int \int \int    S(k_x, k_y, k_z) \cdot \nonumber \\
+	e^{-j \sqrt{ 4 (\frac{\omega}{c})^2 - k_x^2 - k_y^2 } z_0} e^{j k_x x + j k_y y + j k_z z} dk_x dk_y dk_z.
+\end{gather}
+Recognizing the triple integral as a 3D IFFT, we can express it as
+\begin{gather}
+	s(x,y,z) = \text{IFT}_{3D}  \{  S(k_x, k_y, k_z) e^{-j \sqrt{ 4 (\frac{\omega}{c})^2 - k_x^2 - k_y^2 } z_0} \} .
+\end{gather}
+where $S(k_x, k_y, k_z)$ is a linear interpolation of the 2D Fourier transform of the received antenna responses. This is known as Stolt interpolation.
+
+
+
+
+
+%Let $S(k_x,k_y,z=0,\omega) = \text{FT}_{x,y} \{ s(x, y, z=0, \omega) \}$ be the Fourier transform of the recorded wavefield with respect to $x$ and $y$. Back propagation becomes an efficient element-wise multiplication in the spatial frequency domain.
+%\begin{equation}
+%	S(k_x, k_y, z, \omega) = S(k_x, k_y, z=0, \omega) e^{j k_z z},
+%\end{equation}
+%where
+%\begin{equation}
+%  	k_z = \sqrt{ (\frac{2 \omega}{c}) ^ 2 - k_x^2 - k_y^2}.
+%\end{equation}
+%
+%The image in the frequency domain is reconstructed, as before, by integrating the back propagated field over all frequencies.
+%\begin{equation}
+%	S(k_x, k_y, z) = \int S(k_x, k_y, z=0, \omega) e^{j k_z z} d\omega. \label{eq:stolt-integral}
+%\end{equation}
+%Finally, we use the inverse Fourier transform to recover the image in the spatial domain, $s(x,y,z) = \text{IFT}_{k_x, k_y} \{ S(k_x, k_y, z) \}$. 
+%
+%The pre and post Fourier transforms can be done efficiently using FFTs, and back propagation is a fast element-wise multiplication in the frequency domain. The only remaining integral at this point is given by equation \ref{eq:stolt-integral}, which as a further optimization, can be computed efficiently by noting that it has a similar form to the inverse Fourier transform. 
+%
+%By resampling $S(k_x, k_y, z=0, \omega)$ at evenly spaced intervals of $k_z$ (a technique known as Stolt interpolation in the seismic imaging field),
+%\begin{equation}
+%	S'(k_x, k_y, z=0, k_z) = \text{Stolt}\{ S(k_x, k_y, z=0, \omega) \},
+%\end{equation}
+%the integral in equation \ref{eq:stolt-integral} can be efficiently computed using an inverse FFT. Resampling may be done using linear interpolation.
+%\begin{gather}
+%	S(k_x, k_y, z) = \int S(k_x, k_y, z=0, \omega) e^{j k_z z} d\omega 	\nonumber \\
+%	= \int S'(k_x, k_y, z=0, k_z) e^{j k_z z} dk_z	\nonumber \\
+%	= \text{IFT}_{k_z} \{ S'(k_x, k_y, z=0, k_z) e^{j k_z z_0} \},
+%\end{gather}
+%where $z_0$ is the minimum distance from the antenna plane that we wish to image.
 
 The whole algorithm is then given as follows: \\
 1. Pre-transform the received signal to the spatial frequency domain using a 2D FFT.
@@ -301,7 +348,7 @@ We assume that there are $N_{ant}\times N_{ant}$ antennas arranged in a square a
 \hline
 \bf Operation & \bf Time \\
 \hline
-send\_left\_right & $N_f \times T_M + 4L$ \\
+send\_neighbours & $N_f \times T_M + 4L$ \\
 receive\_and\_forward & $ \left( N_{ant} - 1 \right) \times \left( \frac{N_f \times 8}{B} + L \right)$ \\
 fft & $ N_f \times \log_2N_f \times (8T_F + 3T_M) $ \\
 ptwise\_vector\_mult & $ N_f \times (6T_F + 3T_M) $\\
@@ -316,7 +363,7 @@ By combining the times for individual operations with the complete algorithm, as
 \[
 \begin{array}{l l l}
 
-T & = & 6 \times (\text{send\_left\_right} + \text{receive\_and\_forward}) + \\
+T & = & 6 \times (\text{send\_neighbours} + \text{receive\_and\_forward}) + \\
  &   & 5 \times \text{fft} + \text{ptwise\_vector\_mult} + \text{stolt\_interpolation} \\ 
  & = & N_f \big( T_F(16 + 40\log_2N_f) + T_M(15\log_2N_f + 13) \big) + \\
  &   & 6 \left( N_{ant} - 1 \right) \left( \frac{8N_f}{B} + L\right) + 24L
